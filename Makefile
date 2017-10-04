@@ -1,26 +1,31 @@
 CC=g++
 NVCC=nvcc
-OBJS=main.o
-CXXFLAGS=-Wall -Werror -Wextra -pedantic -std=c++17
-NVCCFLAGS=-O3
-LDFLAGS=-L/usr/local/cuda/lib
-LDLIBS=-lcuda -lcudart -lcublas
+NVCCFLAGS=-c --compiler-options='-Wall -Wextra -Werror -g'
+
+BUILD_DIR=./build/
 
 BIN=artracer
+
+OBJS_CU=test.o
+OBJS=main.o
 
 VPATH=src
 
 all: $(BIN)
 
-$(BIN): $(OBJS)
-	$(NVCC) $(NVCCFLAGS) $^
-	$(NVCC) $^ -o $@ $(LBLIBS)
-
-clean:
-	$(RM) $(BIN)
-	$(RM) $(OBJS)
+$(BIN): $(OBJS) $(OBJS_CU)
+	mkdir -p $(BUILD_DIR)
+	$(NVCC) $^ -o $@
+	mv $^ $(BUILD_DIR)
 
 %.o: %.cu
-	$(NVCC) $(NVCCFLAGS) -dc $<
+	$(NVCC) $(NVCCFLAGS) $^ -o $@
+
+%.o: %.cpp
+	$(NVCC) $(NVCCFLAGS) $^ -o $@
+
+clean:
+	$(RM) $(BIN) a.out
+	$(RM) $(BUILD_DIR)
 
 .PHONY: clean all
