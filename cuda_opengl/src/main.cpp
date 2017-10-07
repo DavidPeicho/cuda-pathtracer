@@ -7,7 +7,7 @@
 
 #include <cuda_gl_interop.h>
 
-#include "interop.hh"
+#include "interop.h"
 
 #include "kernel.hh"
 
@@ -49,9 +49,10 @@ static
 void
 glfw_window_size_callback(GLFWwindow* window, int width, int height)
 {
-	struct interop* const interop = (struct interop* const)glfwGetWindowUserPointer(window);
+	driver::Interop* const interop =
+    (driver::Interop* const)glfwGetWindowUserPointer(window);
 
-	set_size(interop, width, height);
+	interop->setSize(width, height);
 }
 
 int
@@ -84,47 +85,32 @@ main(int argc, char* argv[])
 	cudaStreamCreateWithFlags(&stream, cudaStreamDefault);
 	cudaEventCreateWithFlags(&event, cudaEventBlockingSync);
 
-	struct interop* const interop = create(2);
+  int width, height;
+  glfwGetFramebufferSize(window, &width, &height);
 
-	int width, height;
+  driver::Interop interop(width, height);
 
-	glfwGetFramebufferSize(window, &width, &height);
-
-	cuda_err = set_size(interop, width, height);
-
-	glfwSetWindowUserPointer(window, interop);
+	glfwSetWindowUserPointer(window, &interop);
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 
 	while (!glfwWindowShouldClose(window))
 	{
-
-		int         width, height;
 		cudaArray_t cuda_array;
 
-		interop_size_get(interop, width, height);
+		interop.getSize(width, height);
+    cuda_err = interop.map(stream);
 
-		cuda_err = map_resource(interop, stream);
+		cuda_err = kernel_launcher(interop.getArray(), width, height, event, stream);
+		cuda_err = interop.unmap(stream);
 
-		cuda_err = kernel_launcher(get_array(interop),
-			width,
-			height,
-			event,
-			stream);
-
-		cuda_err = unmap_resource(interop, stream);
-
-		blit(interop);
-		swap(interop);
+		interop.blit();
+		interop.swap();
 
 		glfwSwapBuffers(window);
-
 		glfwPollEvents();
 	}
 
-	clean(interop);
-
 	glfwDestroyWindow(window);
-
 	glfwTerminate();
 
 	cudaDeviceReset();
