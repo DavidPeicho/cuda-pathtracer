@@ -1,6 +1,13 @@
 #pragma once
 
+#ifdef _WIN64
+# include <windows.h>
+#endif
+
 #include <cuda_runtime.h>
+#include <glad/glad.h>
+
+#include <cuda_gl_interop.h>
 
 namespace driver
 {
@@ -46,7 +53,7 @@ namespace driver
       }
 
       void
-      getSize(int& const w, int& const h);
+      getSize(int& w, int& h);
 
     private:
       int _width;

@@ -1,18 +1,20 @@
-#include "glad/glad.h"
-#include "GLFW/glfw3.h"
+#ifdef _WIN64
+# include <windows.h>
+#endif
 
-#include <stdlib.h>
-#include <iostream>
-#include <stdbool.h>
-
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
 
-#include "interop.h"
+#include <iostream>
 
+#include "driver/cuda_helper.h"
+#include "driver/gpu_info.h"
+#include "driver/interop.h"
 #include "kernel.hh"
+#include "scene.h"
 
-static
-void
+static void
 glfw_init(GLFWwindow** window, const int width, const int height)
 {
 	if (!glfwInit())
@@ -58,26 +60,31 @@ glfw_window_size_callback(GLFWwindow* window, int width, int height)
 int
 main(int argc, char* argv[])
 {
+  if (argc < 2)
+  {
+    std::cerr << "artracer: missing scene argument.\n";
+    std::cerr << "usage: artracer [OBJ SCENE]" << std::endl;
+    return 1;
+  }
+
+  // Parses selected scene using TinyObjLoader.
+  scene::Scene scene("assets/cube.obj");
+  if (!scene.ready())
+  {
+    std::cerr << "artracer: obj parsing failed.\n";
+    std::cerr << "output: " << scene.error() << std::endl;
+    return 1;
+  }
+
+  // Gets back information about the GPUs.
+  driver::GPUInfo gpu_info;
+  cudaSetDevice(gpu_info.getCUDAGPU().device_id);
+
+  const unsigned int resolution_width = 512;
+  const unsigned int resolution_height = 512;
+
 	GLFWwindow* window;
-
 	glfw_init(&window, 1024, 1024);
-
-	cudaError_t cuda_err;
-
-	int gl_device_id;
-	unsigned int gl_device_count;
-	cudaGLGetDevices(&gl_device_count, &gl_device_id, 1, cudaGLDeviceListAll);
-
-	int cuda_device_id = (argc > 1) ? atoi(argv[1]) : gl_device_id;
-	cudaSetDevice(cuda_device_id);
-
-	struct cudaDeviceProp props;
-
-	cudaGetDeviceProperties(&props, gl_device_id);
-	std::cout << "GL   : " <<  props.name << " -> " << props.multiProcessorCount << std::endl;
-
-	cudaGetDeviceProperties(&props, cuda_device_id);
-	std::cout << "CUDA   : " << props.name << " -> " << props.multiProcessorCount << std::endl;
 
 	cudaStream_t stream;
 	cudaEvent_t  event;
@@ -93,6 +100,7 @@ main(int argc, char* argv[])
 	glfwSetWindowUserPointer(window, &interop);
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 
+  cudaError_t cuda_err;
 	while (!glfwWindowShouldClose(window))
 	{
 		cudaArray_t cuda_array;

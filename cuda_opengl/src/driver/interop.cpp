@@ -1,8 +1,3 @@
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
-#include <cuda_gl_interop.h>
-
 #include <iostream>
 
 #include "interop.h"
@@ -123,7 +118,7 @@ namespace driver
   }
 
   void
-  Interop::getSize(int& const w, int& const h)
+  Interop::getSize(int& w, int& h)
   {
     w = _width;
     h = _height;
