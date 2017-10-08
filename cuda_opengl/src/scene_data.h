@@ -18,6 +18,15 @@ namespace scene
     struct Buffer<int> material_ids;
   };
 
+  struct SceneData
+  {
+    struct Camera *cam;
+    struct Buffer<struct Mesh> meshes;
+    struct Buffer<tinyobj::real_t> vertices;
+    struct Buffer<tinyobj::real_t> normals;
+    struct Buffer<struct Material> materials;
+  };
+
   struct Material
   {
     tinyobj::real_t ambient[3];
@@ -32,16 +41,8 @@ namespace scene
   {
     glm::ivec2 res;
     glm::vec3 position;
+    glm::vec3 dir;
     float fov_x;
-  };
-
-  struct SceneData
-  {
-    struct Camera *cam;
-    struct Buffer<Mesh> meshes;
-    struct Buffer<tinyobj::real_t> vertices;
-    struct Buffer<tinyobj::real_t> normals;
-    struct Buffer<Material> materials;
   };
 
   struct Ray

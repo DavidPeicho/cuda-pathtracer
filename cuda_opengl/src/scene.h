@@ -20,6 +20,12 @@ namespace scene
       void
       release();
 
+      const inline struct SceneData *
+      getDevicePointer()
+      {
+        return _d_sceneData;
+      }
+
       inline bool
       ready()
       {

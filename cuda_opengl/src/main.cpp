@@ -68,6 +68,13 @@ main(int argc, char* argv[])
     return 1;
   }
 
+  // Gets back information about the GPUs.
+  driver::GPUInfo gpu_info;
+  cudaSetDevice(gpu_info.getCUDAGPU().device_id);
+
+  // Logs information about the GPUs.
+  std::cout << gpu_info.getProfile() << std::endl;
+
   // Parses selected scene using TinyObjLoader.
   scene::Scene scene("assets/cube.obj");
   if (!scene.ready())
@@ -76,10 +83,12 @@ main(int argc, char* argv[])
     std::cerr << "output: " << scene.error() << std::endl;
     return 1;
   }
+  std::cout << "uploading .obj scene to the GPU..." << std::endl;
+  scene.upload();
 
-  // Gets back information about the GPUs.
-  driver::GPUInfo gpu_info;
-  cudaSetDevice(gpu_info.getCUDAGPU().device_id);
+  // Logs information about the GPUs, allows to see
+  // how much memory is consummed by the obj scene.
+  std::cout << gpu_info.getProfile() << std::endl;
 
 	GLFWwindow* window;
 	glfw_init(&window, 1024, 1024);
@@ -105,7 +114,8 @@ main(int argc, char* argv[])
 		interop.getSize(pow2_width, pow2_height);
     cuda_err = interop.map(stream);
 
-		cuda_err = raytrace(interop.getArray(), width, height, stream);
+		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(),
+      width, height, stream);
 		cuda_err = interop.unmap(stream);
 
 		interop.blit();

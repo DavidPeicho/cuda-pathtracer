@@ -4,6 +4,8 @@
 #include <driver_types.h>
 #include <string>
 
+#define HOST_DEVICE __host__ __device__
+
 #define cudaCheckError()                                \
 {                                                       \
   cudaError_t e = cudaGetLastError();                   \
@@ -22,7 +24,7 @@
   {                                                                           \
       std::stringstream ss;                                                   \
       ss << "Cuda failure " << __FILE__  << ":" << __LINE__;                  \
-      ss << " : " << cudaGetErrorString(e) << "\n";                           \
+      ss << " : " << cudaGetErrorString(e) << std::endl;                      \
       throw std::runtime_error(ss.str());                                     \
   }                                                                           \
 }

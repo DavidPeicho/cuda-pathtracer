@@ -57,4 +57,24 @@ namespace driver
     delete _gpus[1];
   }
 
+  std::string
+  GPUInfo::getProfile()
+  {
+    std::stringstream ss;
+    ss << "[GPU " << _gpus[0]->device_id << "]";
+
+    size_t free_byte;
+    size_t total_byte;
+
+    if (cudaMemGetInfo(&free_byte, &total_byte) == cudaSuccess)
+    {
+      free_byte /= 1024;
+      total_byte /= 1024;
+      ss << "\n- memory: " << free_byte << "/" << total_byte << " (ko)";
+    }
+    ss << std::endl;
+
+    return ss.str();
+  }
+
 } // namespace driver

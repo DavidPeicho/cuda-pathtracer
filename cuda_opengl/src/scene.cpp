@@ -15,13 +15,18 @@ namespace scene
     using ShapeVector = std::vector<tinyobj::shape_t>;
     using MaterialVector = std::vector<tinyobj::material_t>;
     using Real = tinyobj::real_t;
-
-    using Material = struct scene::Material;
-    using Mesh = struct scene::Mesh;
     
     void upload_camera(struct SceneData &out_scene)
     {
+      // DEBUG
+      Camera cam;
+      cam.fov_x = 90.0;
+      cam.dir[2] = 1.0;
+      cam.position[2] = -5.0;
+      // END DEBUG
       cudaMalloc(&out_scene.cam, sizeof (struct Camera));
+      cudaMemcpy(out_scene.cam, &cam, sizeof (struct Camera),
+        cudaMemcpyHostToDevice);
       cudaThrowError();
     }
 
@@ -44,7 +49,7 @@ namespace scene
     /// <param name="materials">Materials obtained from TinyObjLoader.</param>
     /// <param name="d_materials">Materials storage for the GPU.</param>
     void upload_materials(const MaterialVector &materials,
-                          struct Buffer<Material> &out_materials)
+                          Buffer<Material> &out_materials)
     {
       size_t nb_mat = materials.size();
       size_t nb_bytes = nb_mat * sizeof(Material);
@@ -72,8 +77,7 @@ namespace scene
       delete tmp_materials;
     }
 
-    void upload_meshes(const ShapeVector& shapes,
-      struct Buffer<Mesh> &out_meshes)
+    void upload_meshes(const ShapeVector &shapes, Buffer<Mesh> &out_meshes)
     {
       /// The Mesh structure looks like:
       /// {
@@ -100,23 +104,24 @@ namespace scene
         tmp_mesh.indices.size = nb_indices;
         tmp_mesh.material_ids.size = nb_mat;
 
-        cudaMalloc(&tmp_mesh.indices.data, nb_bytes_indices);
+        cudaMalloc(&(tmp_mesh.indices.data), nb_bytes_indices);
         cudaThrowError();
-        cudaMalloc(&tmp_mesh.material_ids.data, nb_bytes_materials);
+        cudaMalloc(&(tmp_mesh.material_ids.data), nb_bytes_materials);
         cudaThrowError();
 
         // Copies `indices' to the Mesh struct
         cudaMemcpy(tmp_mesh.indices.data, &mesh.indices[0], nb_bytes_indices,
           cudaMemcpyHostToDevice);
         // Copies `material_ids'
-        cudaMemcpy(&tmp_mesh.material_ids, &mesh.material_ids[0],
+        cudaMemcpy(tmp_mesh.material_ids.data, &mesh.material_ids[0],
           nb_bytes_materials, cudaMemcpyHostToDevice);
       }
       
       out_meshes.size = nb_meshes;
       cudaMalloc(&out_meshes.data, nb_bytes);
       cudaThrowError();
-      cudaMemcpy(out_meshes.data, tmp_meshes, nb_bytes, cudaMemcpyHostToDevice);
+      cudaMemcpy(out_meshes.data, tmp_meshes, nb_bytes,
+        cudaMemcpyHostToDevice);
 
       delete tmp_meshes;
     }
@@ -156,7 +161,6 @@ namespace scene
     upload_attribute(_attrib.normals, _sceneData.normals);
     upload_materials(_materials, _sceneData.materials);
     upload_meshes(_shapes, _sceneData.meshes);
-
     // Now the sceneData struct contains pointers to memory adresses
     // mapped by the GPU, we can send the whole struct to the GPU.
     cudaMalloc(&_d_sceneData, sizeof(struct SceneData));

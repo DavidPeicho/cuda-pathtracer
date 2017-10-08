@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <sstream>
+
 namespace driver
 {
 
@@ -20,6 +23,10 @@ namespace driver
     public:
       GPUInfo();
       ~GPUInfo();
+
+    public:
+      std::string
+      getProfile();
 
     public:
       inline GPU&
