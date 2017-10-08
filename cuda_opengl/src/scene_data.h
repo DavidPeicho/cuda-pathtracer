@@ -1,20 +1,53 @@
 #pragma once
 
+#include <glm/common.hpp>
 #include <tiny_obj_loader.h>
 
-struct Mesh
+namespace scene
 {
-  tinyobj::index_t *indices;
-  size_t nb_indices;
-  int *material_ids;
-};
+  template <typename T>
+  struct Buffer
+  {
+    size_t size;
+    T *data;
+  };
 
-struct Material
-{
-  tinyobj::real_t ambient[3];
-  tinyobj::real_t diffuse[3];
-  tinyobj::real_t specular[3];
-  tinyobj::real_t transmittance[3];
-  tinyobj::real_t emission[3];
-  tinyobj::real_t shininess;
-};
+  struct Mesh
+  {
+    struct Buffer<tinyobj::index_t> indices;
+    struct Buffer<int> material_ids;
+  };
+
+  struct Material
+  {
+    tinyobj::real_t ambient[3];
+    tinyobj::real_t diffuse[3];
+    tinyobj::real_t specular[3];
+    tinyobj::real_t transmittance[3];
+    tinyobj::real_t emission[3];
+    tinyobj::real_t shininess;
+  };
+
+  struct Camera
+  {
+    glm::ivec2 res;
+    glm::vec3 position;
+    float fov_x;
+  };
+
+  struct SceneData
+  {
+    struct Camera *cam;
+    struct Buffer<Mesh> meshes;
+    struct Buffer<tinyobj::real_t> vertices;
+    struct Buffer<tinyobj::real_t> normals;
+    struct Buffer<Material> materials;
+  };
+
+  struct Ray
+  {
+    glm::vec3 dir;
+    glm::vec3 origin;
+  };
+
+}

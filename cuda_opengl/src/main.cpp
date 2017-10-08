@@ -11,8 +11,9 @@
 #include "driver/cuda_helper.h"
 #include "driver/gpu_info.h"
 #include "driver/interop.h"
-#include "kernel.hh"
+#include "raytrace.h"
 #include "scene.h"
+#include "utils.h"
 
 static void
 glfw_init(GLFWwindow** window, const int width, const int height)
@@ -80,22 +81,20 @@ main(int argc, char* argv[])
   driver::GPUInfo gpu_info;
   cudaSetDevice(gpu_info.getCUDAGPU().device_id);
 
-  const unsigned int resolution_width = 512;
-  const unsigned int resolution_height = 512;
-
 	GLFWwindow* window;
 	glfw_init(&window, 1024, 1024);
 
 	cudaStream_t stream;
-	cudaEvent_t  event;
-
 	cudaStreamCreateWithFlags(&stream, cudaStreamDefault);
-	cudaEventCreateWithFlags(&event, cudaEventBlockingSync);
 
-  int width, height;
+  int width = 0;
+  int height = 0;
   glfwGetFramebufferSize(window, &width, &height);
 
-  driver::Interop interop(width, height);
+  unsigned int pow2_width = utils::nextPow2(width);
+  unsigned int pow2_height = utils::nextPow2(height);
+
+  driver::Interop interop(pow2_width, pow2_height);
 
 	glfwSetWindowUserPointer(window, &interop);
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
@@ -103,12 +102,10 @@ main(int argc, char* argv[])
   cudaError_t cuda_err;
 	while (!glfwWindowShouldClose(window))
 	{
-		cudaArray_t cuda_array;
-
-		interop.getSize(width, height);
+		interop.getSize(pow2_width, pow2_height);
     cuda_err = interop.map(stream);
 
-		cuda_err = kernel_launcher(interop.getArray(), width, height, event, stream);
+		cuda_err = raytrace(interop.getArray(), width, height, stream);
 		cuda_err = interop.unmap(stream);
 
 		interop.blit();

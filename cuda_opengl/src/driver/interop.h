@@ -14,7 +14,7 @@ namespace driver
   class Interop
   {
     public:
-      Interop(int w, int h);
+      Interop(unsigned int w, unsigned int h);
       Interop();
       ~Interop();
 
@@ -38,7 +38,7 @@ namespace driver
       blit();
 
       cudaError_t
-      setSize(const int w, const int h);
+      setSize(const unsigned int w, const unsigned int h);
 
       inline int
       getIndex()
@@ -53,11 +53,11 @@ namespace driver
       }
 
       void
-      getSize(int& w, int& h);
+      getSize(unsigned int& w, unsigned int& h);
 
     private:
-      int _width;
-      int _height;
+      unsigned int _width;
+      unsigned int _height;
 
       bool _allocated;
       

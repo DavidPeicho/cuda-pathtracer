@@ -45,10 +45,8 @@ namespace scene
       std::vector<tinyobj::material_t> _materials;
       tinyobj::attrib_t _attrib;
 
-      tinyobj::real_t *_d_vertices;
-      tinyobj::real_t *_d_normals;
-      Mesh *_d_meshes;
-      Material *_d_materials;
+      struct SceneData _sceneData;
+      struct SceneData *_d_sceneData;
     
   };
 } // namespace scene

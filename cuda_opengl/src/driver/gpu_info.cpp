@@ -2,7 +2,10 @@
 # include <windows.h>
 #endif
 
+#include <cuda.h>
 #include <cuda_gl_interop.h>
+#include <cuda_runtime.h>
+#include <stdexcept>
 
 #include "gpu_info.h"
 
@@ -13,13 +16,27 @@ namespace driver
 
   GPUInfo::GPUInfo()
   {
-    unsigned int devices_count;
-    struct GPU *gpu = new GPU;
-    cudaGLGetDevices(&devices_count, &gpu->device_id, 1, cudaGLDeviceListAll);
+    int devices_count;
+    cudaGetDeviceCount(&devices_count);
+    if (devices_count <= 0)
+    {
+      std::string error = "GPUInfo(): no GPU found, or connection failed.";
+      throw std::runtime_error(error);
+    }
 
     // Gets back the GPU properties.
+    struct GPU *gpu = new GPU;
     struct cudaDeviceProp deviceProp;
-    //cudaGetDeviceProperties(deviceProp, 0);
+    cudaGetDeviceProperties(&deviceProp, 0);
+
+    gpu->device_id = 0;
+    gpu->clock_rate = deviceProp.clockRate;
+    gpu->warp_size = deviceProp.warpSize;
+    gpu->regs_per_block = deviceProp.regsPerBlock;
+    gpu->shared_mem_block = deviceProp.sharedMemPerBlock;
+    gpu->max_threads_per_block = deviceProp.maxThreadsPerBlock;
+    gpu->multiproc_count = deviceProp.multiProcessorCount;
+    memcpy(&gpu->max_threads_dim, &deviceProp.maxThreadsDim, 3 * sizeof (int));
 
     // For now, we only handle one GPU It would be nice to handle two or more
     // GPUs, and to choose them according to some heuristics.
@@ -27,6 +44,17 @@ namespace driver
     // and to pathtrace with CUDA on the fast GPU.
     _gpus[0] = gpu;
     _gpus[1] = gpu;
+  }
+
+  GPUInfo::~GPUInfo()
+  {
+    GPU *adress = _gpus[0];
+    
+    delete _gpus[0];
+    // Both GPUs are pointing to the same device.
+    if (adress == _gpus[1]) return;
+    
+    delete _gpus[1];
   }
 
 } // namespace driver

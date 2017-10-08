@@ -4,7 +4,7 @@
 
 namespace driver
 {
-  Interop::Interop(int w, int h)
+  Interop::Interop(unsigned int w, unsigned int h)
           : _width(w)
           , _height(h)
           , _allocated(false)
@@ -90,7 +90,7 @@ namespace driver
   }
 
   cudaError_t
-  Interop::setSize(const int w, const int h)
+  Interop::setSize(const unsigned int w, const unsigned int h)
   {
     cudaError_t cuda_err = cudaSuccess;
 
@@ -118,7 +118,7 @@ namespace driver
   }
 
   void
-  Interop::getSize(int& w, int& h)
+  Interop::getSize(unsigned int& w, unsigned int& h)
   {
     w = _width;
     h = _height;
