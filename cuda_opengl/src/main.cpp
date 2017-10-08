@@ -76,7 +76,7 @@ main(int argc, char* argv[])
   std::cout << gpu_info.getProfile() << std::endl;
 
   // Parses selected scene using TinyObjLoader.
-  scene::Scene scene("assets/cube.obj");
+  scene::Scene scene(argv[1]);
   if (!scene.ready())
   {
     std::cerr << "artracer: obj parsing failed.\n";
