@@ -22,7 +22,8 @@ namespace scene
       Camera cam;
       cam.fov_x = 90.0;
       cam.dir[2] = 1.0;
-      cam.position[2] = -5.0;
+      cam.position[2] = -10.0;
+	  cam.position[0] = -0.8;
       // END DEBUG
       cudaMalloc(&out_scene.cam, sizeof (struct Camera));
       cudaMemcpy(out_scene.cam, &cam, sizeof (struct Camera),
