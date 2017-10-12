@@ -7,7 +7,6 @@ build/
 # Visual studio
 .vs
 x64
-*.vcxproj
 *.vcxproj.user
 *.pdb
 

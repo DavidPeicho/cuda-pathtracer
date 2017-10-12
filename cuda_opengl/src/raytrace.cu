@@ -39,7 +39,7 @@ intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, glm::vec3& n, fl
 	n = glm::normalize(glm::cross(v0v1, v0v2));
 	glm::vec3 p_vec = glm::cross(ray.dir, v0v2);
 	double det = glm::dot(v0v1, p_vec);
-	if (det > -0.0000001 && det < 0.0000001)
+	if (det < 0.0000001)
 		return false;
 
 	double inv_det = 1 / det;
@@ -143,14 +143,13 @@ kernel(const unsigned int width, const unsigned int height,
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
 	struct scene::Camera *cam = scene->cam;
-	float screen_dist = half_w / __tanf(cam->fov_x);
+  float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
 
 	scene::Ray r;
 	r.origin = scene->cam->position;
-	r.dir.z = screen_dist;
-	r.dir.x = x - half_w;
-	r.dir.y = y - half_h;
-	r.dir = glm::normalize(r.dir);
+  r.dir = r.origin + (cam->dir * screen_dist) + (cam->u * (float)(x - half_w))
+          + (cam->v * (float)(y - half_h));
+  r.dir = glm::normalize(r.dir);
 
 	glm::vec3 rad = radiance(r, scene, &rand_state);
 

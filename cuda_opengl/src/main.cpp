@@ -55,7 +55,9 @@ glfw_window_size_callback(GLFWwindow* window, int width, int height)
 	driver::Interop* const interop =
     (driver::Interop* const)glfwGetWindowUserPointer(window);
 
-	interop->setSize(width, height);
+  unsigned int pow2_width = utils::nextPow2(width);
+  unsigned int pow2_height = utils::nextPow2(height);
+	interop->setSize(pow2_width, pow2_height);
 }
 
 int
@@ -76,7 +78,8 @@ main(int argc, char* argv[])
   std::cout << gpu_info.getProfile() << std::endl;
 
   // Parses selected scene using TinyObjLoader.
-  scene::Scene scene(argv[1]);
+  //scene::Scene scene(argv[1]);
+  scene::Scene scene("assets/cube.obj");
   if (!scene.ready())
   {
     std::cerr << "artracer: obj parsing failed.\n";
@@ -129,6 +132,7 @@ main(int argc, char* argv[])
 	glfwTerminate();
 
 	cudaDeviceReset();
+  //scene.release();
 
 	exit(EXIT_SUCCESS);
 }

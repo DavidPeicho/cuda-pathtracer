@@ -42,6 +42,8 @@ namespace scene
     glm::ivec2 res;
     glm::vec3 position;
     glm::vec3 dir;
+    glm::vec3 u;
+    glm::vec3 v;
     float fov_x;
   };
 

@@ -1,5 +1,11 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
+
+#include <glm/geometric.hpp>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include <string>
 
 #include "driver/cuda_helper.h"
@@ -20,11 +26,20 @@ namespace scene
     {
       // DEBUG
       Camera cam;
-      cam.fov_x = 90.0;
-      cam.dir[2] = 1.0;
-      cam.position[2] = -10.0;
-	  cam.position[0] = -0.8;
+      cam.position[2] = -3.0;
+
+      cam.fov_x = (170.0 * M_PI) / 180.0;
+      cam.u[0] = 1.0;
+      cam.u[1] = 0.0;
+      cam.u[2] = 0.0;
+      cam.v[0] = 0.0;
+      cam.v[1] = 1.0;
+      cam.v[2] = 0.0;
+      cam.u = glm::normalize(cam.u);
+      cam.v = glm::normalize(cam.v);
+      cam.dir = glm::normalize(glm::cross(cam.v, cam.u));
       // END DEBUG
+
       cudaMalloc(&out_scene.cam, sizeof (struct Camera));
       cudaMemcpy(out_scene.cam, &cam, sizeof (struct Camera),
         cudaMemcpyHostToDevice);
@@ -175,7 +190,7 @@ namespace scene
   void
   Scene::release()
   {
-    if (!_uploaded)
+    if (!_uploaded || !_ready)
       return;
     
     // Free one-depth pointer, saved on the host stack.
