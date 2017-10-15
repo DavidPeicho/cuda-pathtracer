@@ -31,31 +31,43 @@ union rgba_24
 	};
 };
 
-HOST_DEVICE inline bool
+__device__ inline bool
 intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, glm::vec3& n, float& t)
 {
 	glm::vec3 v0v1 = vert[1] - vert[0];
 	glm::vec3 v0v2 = vert[2] - vert[0];
 	n = glm::normalize(glm::cross(v0v1, v0v2));
 	glm::vec3 p_vec = glm::cross(ray.dir, v0v2);
-	double det = glm::dot(v0v1, p_vec);
+	float det = glm::dot(v0v1, p_vec);
 	if (det < 0.0000001)
 		return false;
 
-	double inv_det = 1 / det;
+	float inv_det = __fdividef(1.f, det);
 	glm::vec3 t_vec = ray.origin - vert[0];
-	double u = glm::dot(t_vec, p_vec) * inv_det;
+	float u = glm::dot(t_vec, p_vec) * inv_det;
 	if (u < 0 || u > 1) return false;
 
 	glm::vec3 qvec = glm::cross(t_vec, v0v1);
-	double v = glm::dot(ray.dir, qvec) * inv_det;
+	float v = glm::dot(ray.dir, qvec) * inv_det;
 	if (v < 0 || u + v > 1) return false;
 
 	t = glm::dot(v0v2, qvec) * inv_det;
 	return true;
 }
 
-HOST_DEVICE inline bool
+__device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, float& t) {
+
+	glm::vec3 op = pos - r.origin;
+	float epsilon = 0.01f;
+	float b = dot(op, r.dir);
+	float disc = b*b - dot(op, op) + rad*rad;
+	if (disc<0) return 0; else disc = sqrtf(disc);
+	(t = b - disc)>epsilon ? t : ((t = b + disc)>epsilon ? t : 0);
+
+	return t != 0;
+}
+
+__device__ inline bool
 intersect(const scene::Ray& r,
 	const struct scene::SceneData *const scene, glm::vec3& n, float& t)
 {
@@ -74,6 +86,8 @@ intersect(const scene::Ray& r,
 			}
 			if (intersectTriangle(vertex, r, n, t))
 				return true;
+
+			//if (intersectSphere(r, )
 		}
 	}
 	return false;
@@ -87,15 +101,15 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 	glm::vec3 mask = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	const int max_bounces = 1;
+	const int max_bounces = 2;
 	for (int b = 0; b < max_bounces; b++)
 	{
 		glm::vec3 normal;
 		glm::vec3 oriented_normal;
 		glm::vec3 new_dir;
 		glm::vec3 inter_point;
-		glm::vec3 color = glm::vec3(0.9f, 0.2f, 0.1f);
-		glm::vec3 emission = color;
+		glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
+		glm::vec3 emission = glm::vec3(1.0f);
 		float t = 100000;
 
 		if (intersect(r, scene, normal, t))
@@ -114,7 +128,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 			glm::vec3 d = glm::normalize(u * cos(r1) * r2_squared + v * sin(r1) * r2_squared + oriented_normal * sqrtf(1 - r2));
 
-			new_dir = r.origin + r.dir * t;
+			r.origin += r.dir * t;
 
 			r.origin += oriented_normal * 0.03f;
 			r.dir = d;
@@ -129,7 +143,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
 	const unsigned int half_w, const unsigned int half_h,
-	const scene::SceneData *const scene, unsigned int hash_seed)
+	const scene::SceneData *const scene, unsigned int hash_seed, glm::vec3 offset)
 {
 	const int x = blockDim.x * blockIdx.x + threadIdx.x;
 	const int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -145,11 +159,13 @@ kernel(const unsigned int width, const unsigned int height,
 	struct scene::Camera *cam = scene->cam;
   float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
 
+   glm::vec3 cx = glm::vec3(width * cam->fov_x / height, 0.0f, 0.0f);
+   glm::vec3 cy = glm::normalize(glm::cross(cx, cam->dir)) * cam->fov_x;
+
 	scene::Ray r;
-	r.origin = scene->cam->position;
-  r.dir = r.origin + (cam->dir * screen_dist) + (cam->u * (float)(x - half_w))
-          + (cam->v * (float)(y - half_h));
-  r.dir = glm::normalize(r.dir);
+	r.origin = cam->position;
+  r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + cam->dir;
+  r.dir = glm::normalize(r.dir) * 40.f + r.origin + offset;
 
 	glm::vec3 rad = radiance(r, scene, &rand_state);
 
@@ -176,7 +192,7 @@ inline unsigned int WangHash(unsigned int a)
 
 cudaError_t
 raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
-	const unsigned int width, const unsigned int height, cudaStream_t stream)
+	const unsigned int width, const unsigned int height, cudaStream_t stream, glm::vec3 offset)
 {
 	static unsigned int seed = 0;
 	seed++;
@@ -194,7 +210,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height,
-			width / 2, height / 2, scene, WangHash(seed));
+			width / 2, height / 2, scene, WangHash(seed), offset);
 
 	return cudaSuccess;
 }

@@ -40,6 +40,11 @@ namespace driver
       cudaError_t
       setSize(const unsigned int w, const unsigned int h);
 
+	  void
+	  setKeyState(const unsigned int key, bool state);
+	  bool
+	  isKeyPressed(const unsigned int key);
+
       inline int
       getIndex()
       {
@@ -66,5 +71,7 @@ namespace driver
       GLuint _rb[2];
       cudaGraphicsResource *_d_cgr[2];
       cudaArray *_d_ca[2];
+
+	  bool keys[65536];
   };
 } // namespace driver

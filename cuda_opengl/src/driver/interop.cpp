@@ -117,6 +117,19 @@ namespace driver
     return cuda_err;
   }
 
+
+  void
+  Interop::setKeyState(const unsigned int key, bool state)
+  {
+	  keys[key] = state;
+  }
+
+  bool
+  Interop::isKeyPressed(const unsigned int key)
+  {
+	  return keys[key];
+  }
+
   void
   Interop::getSize(unsigned int& w, unsigned int& h)
   {

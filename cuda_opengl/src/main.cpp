@@ -60,6 +60,15 @@ glfw_window_size_callback(GLFWwindow* window, int width, int height)
 	interop->setSize(pow2_width, pow2_height);
 }
 
+void
+glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	driver::Interop* const interop =
+		(driver::Interop* const)glfwGetWindowUserPointer(window);
+
+	interop->setKeyState(key, action != GLFW_RELEASE);
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -79,7 +88,7 @@ main(int argc, char* argv[])
 
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene(argv[1]);
-  scene::Scene scene("assets/cube.obj");
+  scene::Scene scene(argv[1]);
   if (!scene.ready())
   {
     std::cerr << "artracer: obj parsing failed.\n";
@@ -108,17 +117,18 @@ main(int argc, char* argv[])
 
   driver::Interop interop(pow2_width, pow2_height);
 
-	glfwSetWindowUserPointer(window, &interop);
-	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
+  glfwSetWindowUserPointer(window, &interop);
+  glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
+  glfwSetKeyCallback(window, glfw_key_callback);
 
   cudaError_t cuda_err;
+  glm::vec3 offset = glm::vec3(0.0f);
 	while (!glfwWindowShouldClose(window))
 	{
 		interop.getSize(pow2_width, pow2_height);
-    cuda_err = interop.map(stream);
+		cuda_err = interop.map(stream);
 
-		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(),
-      width, height, stream);
+		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(), width, height, stream, offset);
 		cuda_err = interop.unmap(stream);
 
 		interop.blit();
@@ -126,6 +136,19 @@ main(int argc, char* argv[])
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+
+		if (interop.isKeyPressed(GLFW_KEY_Z))
+			offset.z++;
+		if (interop.isKeyPressed(GLFW_KEY_S))
+			offset.z--;
+		if (interop.isKeyPressed(GLFW_KEY_D))
+			offset.x++;
+		if (interop.isKeyPressed(GLFW_KEY_Q))
+			offset.x--;
+		if (interop.isKeyPressed(GLFW_KEY_SPACE))
+			offset.y++;
+		if (interop.isKeyPressed(GLFW_KEY_LEFT_CONTROL))
+			offset.y--;
 	}
 
 	glfwDestroyWindow(window);
