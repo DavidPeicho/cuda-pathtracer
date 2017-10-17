@@ -61,8 +61,8 @@ __device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, f
 	float epsilon = 0.01f;
 	float b = dot(op, r.dir);
 	float disc = b*b - dot(op, op) + rad*rad;
-	if (disc<0) return 0; else disc = sqrtf(disc);
-	(t = b - disc)>epsilon ? t : ((t = b + disc)>epsilon ? t : 0);
+	if (disc < 0) return 0; else disc = sqrtf(disc);
+	(t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0);
 
 	return t != 0;
 }
@@ -143,7 +143,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
 	const unsigned int half_w, const unsigned int half_h,
-	const scene::SceneData *const scene, unsigned int hash_seed, glm::vec3 offset)
+	const scene::SceneData *const scene, unsigned int hash_seed,
+	glm::vec3 offset, glm::vec3 dir_offset, int frame_nb, glm::vec3 *temporal_framebuffer)
 {
 	const int x = blockDim.x * blockIdx.x + threadIdx.x;
 	const int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -157,17 +158,30 @@ kernel(const unsigned int width, const unsigned int height,
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
 	struct scene::Camera *cam = scene->cam;
-  float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
+	float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
 
-   glm::vec3 cx = glm::vec3(width * cam->fov_x / height, 0.0f, 0.0f);
-   glm::vec3 cy = glm::normalize(glm::cross(cx, cam->dir)) * cam->fov_x;
+	glm::vec3 cx = glm::vec3(width * cam->fov_x / height, 0.0f, 0.0f);
+	glm::vec3 cy = glm::normalize(glm::cross(cx, cam->dir)) * cam->fov_x;
 
+	glm::vec3 rad = glm::vec3(0.0f);
 	scene::Ray r;
-	r.origin = cam->position;
-  r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + cam->dir;
-  r.dir = glm::normalize(r.dir) * 40.f + r.origin + offset;
+	r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + glm::normalize(cam->dir + dir_offset);
+	r.dir = glm::normalize(r.dir);
+	r.origin = r.dir * 40.f + cam->position - offset / 10.f;
 
-	glm::vec3 rad = radiance(r, scene, &rand_state);
+	int samples = 2;
+	for (int i = 0; i < samples; i++)
+		rad += radiance(r, scene, &rand_state);
+
+	rad /= samples;
+
+	rad = glm::clamp(rad, 0.0f, 1.0f);
+
+	int i = (height - y - 1)*width + x;
+	//temporal_framebuffer[i] *= (frame_nb - 1);
+	temporal_framebuffer[i] += rad;
+
+	rad = temporal_framebuffer[i] / (float)frame_nb;
 
 	rgbx.r = rad.x * 255;
 	rgbx.g = rad.y * 255;
@@ -192,7 +206,7 @@ inline unsigned int WangHash(unsigned int a)
 
 cudaError_t
 raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
-	const unsigned int width, const unsigned int height, cudaStream_t stream, glm::vec3 offset)
+	const unsigned int width, const unsigned int height, cudaStream_t stream, glm::vec3 offset, glm::vec3 dir_offset, glm::vec3 *temporal_framebuffer)
 {
 	static unsigned int seed = 0;
 	seed++;
@@ -205,12 +219,12 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 
 	// TODO: We should get into account GPU info, such as number of registers,
 	// shared memory size, warp size, etc...
-	dim3 threads_per_block(8, 8);
-	dim3 nb_blocks(width / 8, height / 8);
+	dim3 threads_per_block(16, 16);
+	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height,
-			width / 2, height / 2, scene, WangHash(seed), offset);
+			width / 2, height / 2, scene, WangHash(seed), offset, dir_offset, seed, temporal_framebuffer);
 
 	return cudaSuccess;
 }

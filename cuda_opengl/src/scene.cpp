@@ -26,7 +26,7 @@ namespace scene
     {
       // DEBUG
       Camera cam;
-      cam.position = glm::vec3(20.f,10.f, 40.0f);
+      cam.position = glm::vec3(20.f,10.f, 20.0f) - glm::vec3(193.f, 86.f, 215.f) / 10.f;
 
       cam.fov_x = (170.0 * M_PI) / 180.0;
       cam.u[0] = 1.0;
@@ -37,7 +37,7 @@ namespace scene
       cam.v[2] = 0.0;
       cam.u = glm::normalize(cam.u);
       cam.v = glm::normalize(cam.v);
-      cam.dir = glm::vec3(0.f, -0.1f, .1f);
+      cam.dir = glm::normalize(glm::vec3(0.f, -0.1f, .1f));
       // END DEBUG
 
       cudaMalloc(&out_scene.cam, sizeof (struct Camera));
