@@ -87,7 +87,14 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 	glm::vec3 mask = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	const int max_bounces = 1;
+  float t = 100000;
+  glm::vec3 normal;
+  if (intersect(r, scene, normal, t))
+  {
+    acc[0] = 1.0;
+  }
+
+	/*const int max_bounces = 1;
 	for (int b = 0; b < max_bounces; b++)
 	{
 		glm::vec3 normal;
@@ -121,7 +128,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 			mask *= color;
 		}
-	}
+	}*/
 
 	return acc;
 }
@@ -146,9 +153,10 @@ kernel(const unsigned int width, const unsigned int height,
   float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
 
 	scene::Ray r;
-	r.origin = scene->cam->position;
-  r.dir = r.origin + (cam->dir * screen_dist) + (cam->u * (float)(x - half_w))
-          + (cam->v * (float)(y - half_h));
+  r.origin = scene->cam->position;
+  glm::vec3 screen_pos = cam->position + (cam->dir * screen_dist)
+        + (cam->u * (float)(x - half_w)) + (cam->v * (float)(y - half_h));
+  r.dir = screen_pos - cam->position;
   r.dir = glm::normalize(r.dir);
 
 	glm::vec3 rad = radiance(r, scene, &rand_state);

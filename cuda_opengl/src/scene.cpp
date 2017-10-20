@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 
 #include <glm/geometric.hpp>
+#include <iostream>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -15,20 +16,20 @@
 
 namespace scene
 {
-
   namespace
   {
     using ShapeVector = std::vector<tinyobj::shape_t>;
     using MaterialVector = std::vector<tinyobj::material_t>;
     using Real = tinyobj::real_t;
-    
+
     void upload_camera(struct SceneData &out_scene)
     {
       // DEBUG
       Camera cam;
-      cam.position[2] = -3.0;
+      cam.position[0] = 0.0;
+      cam.position[2] = 0.0;
 
-      cam.fov_x = (170.0 * M_PI) / 180.0;
+      cam.fov_x = (90.0 * M_PI) / 180.0;
       cam.u[0] = 1.0;
       cam.u[1] = 0.0;
       cam.u[2] = 0.0;
@@ -58,7 +59,7 @@ namespace scene
       cudaMemcpy(out_buffer.data, &attribute[0], nb_bytes,
         cudaMemcpyHostToDevice);
     }
-    
+
     /// <summary>
     /// Uploads every materials.
     /// </summary>
@@ -132,7 +133,7 @@ namespace scene
         cudaMemcpy(tmp_mesh.material_ids.data, &mesh.material_ids[0],
           nb_bytes_materials, cudaMemcpyHostToDevice);
       }
-      
+
       out_meshes.size = nb_meshes;
       cudaMalloc(&out_meshes.data, nb_bytes);
       cudaThrowError();
@@ -141,38 +142,127 @@ namespace scene
 
       delete tmp_meshes;
     }
-    
+
   }
 
   Scene::Scene(const std::string& filepath)
-        : _ready{ false }
-  {
-    init(filepath.c_str());
-  }
+        : _filepath(filepath)
+        , _uploaded(false)
+        , _ready(false)
+  { }
 
   Scene::Scene(const std::string&& filepath)
-        : _ready{ false }
+        : _filepath(filepath)
+        , _uploaded(false)
+        , _ready{ false }
+  { }
+
+  void
+  Scene::upload(bool is_cpu)
   {
-    init(filepath.c_str());
+    if (_uploaded)
+      return;
+
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    tinyobj::attrib_t attrib;
+
+    _ready = tinyobj::LoadObj(&attrib, &shapes,
+      &materials, &_load_error, _filepath.c_str());
+
+    if (!_ready)
+      return;
+
+    if (is_cpu)
+      upload_cpu(shapes, materials, attrib);
+    else
+      upload_gpu(shapes, materials, attrib);
+
+    _uploaded = true;
   }
 
-  Scene::~Scene()
+  void
+  Scene::release(bool is_cpu)
   {
-    release();
+    if (!_uploaded || !_ready)
+      return;
+
+    if (is_cpu)
+      release_cpu();
+    else
+      release_gpu();
+
+    _uploaded = false;
   }
 
-  void 
-  Scene::upload()
+  void
+  Scene::upload_cpu(const std::vector<tinyobj::shape_t> &shapes,
+    const std::vector<tinyobj::material_t>& materials,
+    const tinyobj::attrib_t attrib)
+  {
+    _scene_data = new SceneData;
+    _scene_data->cam = new Camera;
+
+    auto nb_vertices = attrib.vertices.size();
+    auto nb_vertices_bytes = nb_vertices * sizeof(tinyobj::real_t);
+    auto nb_normals = attrib.normals.size();
+    auto nb_normals_bytes = nb_normals * sizeof(tinyobj::real_t);
+
+    // Uploads attributes & materials
+    _scene_data->vertices.size = nb_vertices;
+    _scene_data->vertices.data = new tinyobj::real_t[nb_vertices];
+    memcpy(_scene_data->vertices.data, &attrib.vertices[0], nb_vertices_bytes);
+    _scene_data->normals.size = nb_normals;
+    _scene_data->normals.data = new tinyobj::real_t[nb_normals];
+    memcpy(_scene_data->normals.data, &attrib.normals[0], nb_normals_bytes);
+
+    // Uploads materials
+    _scene_data->materials.size = materials.size();
+    _scene_data->materials.data = new Material[materials.size()];
+    for (size_t i = 0; i < materials.size(); ++i)
+    {
+      Material &mat = _scene_data->materials.data[i];
+      memcpy(&mat.ambient, &materials[i].ambient, 3 * sizeof(Real));
+      memcpy(&mat.diffuse, &materials[i].diffuse, 3 * sizeof(Real));
+      memcpy(&mat.specular, &materials[i].specular, 3 * sizeof(Real));
+      memcpy(&mat.transmittance, &materials[i].transmittance, 3 * sizeof(Real));
+      memcpy(&mat.emission, &materials[i].emission, 3 * sizeof(Real));
+      memcpy(&mat.shininess, &materials[i].shininess, sizeof(Real));
+    }
+
+    // Uploads meshes
+    _scene_data->meshes.size = shapes.size();
+    _scene_data->meshes.data = new Mesh[shapes.size()];
+    for (size_t i = 0; i < shapes.size(); ++i)
+    {
+      Mesh &mesh = _scene_data->meshes.data[i];
+
+      mesh.indices.size = shapes[i].mesh.indices.size();
+      mesh.indices.data = new tinyobj::index_t[mesh.indices.size];
+      auto idx_bytes = mesh.indices.size * sizeof(tinyobj::index_t);
+      std::memcpy(mesh.indices.data, &shapes[i].mesh.indices[0], idx_bytes);
+
+      mesh.material_ids.size = shapes[i].mesh.material_ids.size();
+      mesh.material_ids.data = new int[mesh.material_ids.size];
+      auto mat_bytes = mesh.material_ids.size * sizeof(int);
+      memcpy(mesh.material_ids.data, &shapes[i].mesh.material_ids[0], mat_bytes);
+    }
+  }
+
+  void
+  Scene::upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
+    const std::vector<tinyobj::material_t>& materials,
+    const tinyobj::attrib_t attrib)
   {
     // _sceneData is allocated on the stack,
     // and allows to handle cudaMalloc & cudaFree
 
-    // 
+    //
     // Lines below copy adresses given by the GPU the stack-allocated
     // SceneData struct.
     // Takes also care of making cudaMemcpy of the data.
-    // 
-    upload_camera(_sceneData);
+    //
+    /*upload_camera(_sceneData);
     upload_attribute(_attrib.vertices, _sceneData.vertices);
     upload_attribute(_attrib.normals, _sceneData.normals);
     upload_materials(_materials, _sceneData.materials);
@@ -182,19 +272,26 @@ namespace scene
     cudaMalloc(&_d_sceneData, sizeof(struct SceneData));
     cudaThrowError();
     cudaMemcpy(_d_sceneData, &_sceneData, sizeof(struct SceneData),
-      cudaMemcpyHostToDevice);
-
-    _uploaded = true;
+      cudaMemcpyHostToDevice);*/
   }
 
   void
-  Scene::release()
+  Scene::release_cpu()
   {
-    if (!_uploaded || !_ready)
-      return;
-    
+    delete _scene_data->cam;
+    delete _scene_data->meshes.data;
+    delete _scene_data->vertices.data;
+    delete _scene_data->normals.data;
+    delete _scene_data->materials.data;
+
+    delete _scene_data;
+  }
+
+  void
+  Scene::release_gpu()
+  {
     // Free one-depth pointer, saved on the host stack.
-    cudaFree(_sceneData.cam);
+    /*cudaFree(_sceneData.cam);
     cudaFree(_sceneData.vertices.data);
     cudaFree(_sceneData.normals.data);
     cudaFree(_sceneData.materials.data);
@@ -214,14 +311,7 @@ namespace scene
     }
     cudaFree(_d_sceneData->meshes.data);
 
-    _uploaded = false;
-  }
-
-  void
-  Scene::init(const char *filepath)
-  { 
-    _ready = tinyobj::LoadObj(&_attrib, &_shapes,
-                              &_materials, &_load_error, filepath);
+    _uploaded = false;*/
   }
 
 } // namespace scene

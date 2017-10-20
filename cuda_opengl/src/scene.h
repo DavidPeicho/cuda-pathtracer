@@ -11,19 +11,18 @@ namespace scene
     public:
       Scene(const std::string& filepath);
       Scene(const std::string&& filepath);
-      ~Scene();
 
     public:
       void
-      upload();
+      upload(bool is_cpu);
       
       void
-      release();
+      release(bool is_cpu);
 
       const inline struct SceneData *
-      getDevicePointer()
+      getSceneData()
       {
-        return _d_sceneData;
+        return _scene_data;
       }
 
       inline bool
@@ -42,17 +41,29 @@ namespace scene
       void
       init(const char* filepath);
 
+      void
+      upload_cpu(const std::vector<tinyobj::shape_t> &shapes,
+        const std::vector<tinyobj::material_t>& materials,
+        const tinyobj::attrib_t attrib);
+
+      void
+      upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
+        const std::vector<tinyobj::material_t>& materials,
+        const tinyobj::attrib_t attrib);
+
+      void
+      release_cpu();
+
+      void
+      release_gpu();
+
     private:
+      std::string _filepath;
       bool _uploaded;
       bool _ready;
       std::string _load_error;
 
-      std::vector<tinyobj::shape_t> _shapes;
-      std::vector<tinyobj::material_t> _materials;
-      tinyobj::attrib_t _attrib;
-
-      struct SceneData _sceneData;
-      struct SceneData *_d_sceneData;
-    
+      struct SceneData *_scene_data;
   };
+
 } // namespace scene

@@ -8,12 +8,16 @@
 
 #include <iostream>
 
+#include "cpu_processor.h"
 #include "driver/cuda_helper.h"
 #include "driver/gpu_info.h"
 #include "driver/interop.h"
+#include "gpu_processor.h"
 #include "raytrace.h"
 #include "scene.h"
 #include "utils.h"
+
+#define USE_CPU
 
 static void
 glfw_init(GLFWwindow** window, const int width, const int height)
@@ -70,6 +74,9 @@ main(int argc, char* argv[])
     return 1;
   }
 
+  GLFWwindow* window;
+  glfw_init(&window, 1024, 1024);
+
   // Gets back information about the GPUs.
   driver::GPUInfo gpu_info;
   cudaSetDevice(gpu_info.getCUDAGPU().device_id);
@@ -80,21 +87,24 @@ main(int argc, char* argv[])
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene(argv[1]);
   scene::Scene scene("assets/cube.obj");
+  std::cout << "uploading .obj scene to the GPU..." << std::endl;
+#ifdef USE_CPU
+  scene.upload(true);
+  CPUProcessor processor(1024, 1024);
+#else
+  scene.upload(false);
+  GPUProcessor processor(1024, 1024);
+#endif
   if (!scene.ready())
   {
     std::cerr << "artracer: obj parsing failed.\n";
     std::cerr << "output: " << scene.error() << std::endl;
     return 1;
   }
-  std::cout << "uploading .obj scene to the GPU..." << std::endl;
-  scene.upload();
 
   // Logs information about the GPUs, allows to see
   // how much memory is consummed by the obj scene.
   std::cout << gpu_info.getProfile() << std::endl;
-
-	GLFWwindow* window;
-	glfw_init(&window, 1024, 1024);
 
 	cudaStream_t stream;
 	cudaStreamCreateWithFlags(&stream, cudaStreamDefault);
@@ -114,15 +124,17 @@ main(int argc, char* argv[])
   cudaError_t cuda_err;
 	while (!glfwWindowShouldClose(window))
 	{
-		interop.getSize(pow2_width, pow2_height);
+		/*interop.getSize(pow2_width, pow2_height);
     cuda_err = interop.map(stream);
 
-		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(),
+		cuda_err = raytrace(interop.getArray(), scene.getSceneData(),
       width, height, stream);
 		cuda_err = interop.unmap(stream);
 
 		interop.blit();
-		interop.swap();
+		interop.swap();*/
+
+    processor.run();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
