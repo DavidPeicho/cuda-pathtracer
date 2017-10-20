@@ -57,12 +57,26 @@ namespace driver
         return _d_ca[_index];
       }
 
+      inline bool
+      getMoved()
+      {
+        return _moved;
+      }
+
+      inline void
+      setMoved(bool moved)
+      {
+		  _moved = moved;
+      }
+
       void
       getSize(unsigned int& w, unsigned int& h);
 
     private:
       unsigned int _width;
       unsigned int _height;
+
+	  bool _moved;
 
       bool _allocated;
       

@@ -70,6 +70,8 @@ glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		(driver::Interop* const)glfwGetWindowUserPointer(window);
 
 	interop->setKeyState(key, action != GLFW_RELEASE);
+
+	interop->setMoved(true);
 }
 
 void
@@ -77,6 +79,8 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
 	driver::Interop* const interop =
 		(driver::Interop* const)glfwGetWindowUserPointer(window);
+
+	interop->setMoved(true);
 }
 
 int
@@ -146,8 +150,10 @@ main(int argc, char* argv[])
 		interop.getSize(pow2_width, pow2_height);
 		cuda_err = interop.map(stream);
 
-		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(), width, height, stream, offset, dir_offset, temporal_framebuffer);
+		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(), width, height, stream, offset, dir_offset, temporal_framebuffer, interop.getMoved());
 		cuda_err = interop.unmap(stream);
+
+		interop.setMoved(false);
 
 		interop.blit();
 		interop.swap();
@@ -167,8 +173,6 @@ main(int argc, char* argv[])
 			offset.y++;
 		if (interop.isKeyPressed(GLFW_KEY_LEFT_CONTROL))
 			offset.y--;
-
-		//std::cout << offset.x << " " << offset.y << " " << offset.z << std::endl;
 
 		double xpos, ypos;
 		glfwGetCursorPos(window, &xpos, &ypos);

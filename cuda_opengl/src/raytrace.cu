@@ -61,7 +61,11 @@ __device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, f
 	float epsilon = 0.01f;
 	float b = dot(op, r.dir);
 	float disc = b*b - dot(op, op) + rad*rad;
-	if (disc < 0) return 0; else disc = sqrtf(disc);
+	if (disc < 0)
+		return 0;
+	else
+		//disc = sqrtf(disc);
+		disc = __fsqrt_rn(disc);
 	(t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0);
 
 	return t != 0;
@@ -69,7 +73,7 @@ __device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, f
 
 __device__ inline bool
 intersect(const scene::Ray& r,
-	const struct scene::SceneData *const scene, glm::vec3& n, float& t)
+	const struct scene::SceneData *const scene, glm::vec3& n, float& t, bool& light_emitter)
 {
 	glm::vec3 vertex[3];
 	for (size_t m = 0; m < scene->meshes.size; ++m)
@@ -87,7 +91,11 @@ intersect(const scene::Ray& r,
 			if (intersectTriangle(vertex, r, n, t))
 				return true;
 
-			//if (intersectSphere(r, )
+			if (intersectSphere(r, 0.5f, glm::vec3(0.0f, 0.2f, 0.0f), t))
+			{
+				light_emitter = true;
+				return true;
+			}
 		}
 	}
 	return false;
@@ -101,25 +109,36 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 	glm::vec3 mask = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	const int max_bounces = 2;
+	const int max_bounces = 3;
 	for (int b = 0; b < max_bounces; b++)
 	{
 		glm::vec3 normal;
 		glm::vec3 oriented_normal;
-		glm::vec3 new_dir;
-		glm::vec3 inter_point;
 		glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
-		glm::vec3 emission = glm::vec3(1.0f);
+		// Light energy emission
+		glm::vec3 emission = glm::vec3(2.0f);
+		// For energy compensation on Russian roulette
+		glm::vec3 thoughput = glm::vec3(1.0f);
 		float t = 100000;
+		bool light_emitter = false;
 
-		if (intersect(r, scene, normal, t))
+		//float intersection = (float)intersect(r, scene, normal, t, light_emitter);
+		if (intersect(r, scene, normal, t, light_emitter))
 		{
 			oriented_normal = glm::dot(normal, r.dir) < 0 ? normal : normal * -1.0f;
 
-			acc += mask * emission;
+			//acc += mask * emission * (float)light_emitter * intersection;
+			acc += mask * emission * (float)light_emitter * thoughput;
 
-			float r1 = 2.0f * M_PI * curand_uniform(rand_state);
 			float r2 = curand_uniform(rand_state);
+			float r1 = 2.0f * M_PI * curand_uniform(rand_state);
+
+			// Russian roulette
+			float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+			if (r2 > p)
+				return acc;
+
+			thoughput *= 1 / p;
 
 			float r2_squared = sqrtf(r2);
 
@@ -133,6 +152,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			r.origin += oriented_normal * 0.03f;
 			r.dir = d;
 
+			//mask *= intersection * color + (1.0f - intersection) * 1.0f;
 			mask *= color;
 		}
 	}
@@ -144,7 +164,7 @@ __global__ void
 kernel(const unsigned int width, const unsigned int height,
 	const unsigned int half_w, const unsigned int half_h,
 	const scene::SceneData *const scene, unsigned int hash_seed,
-	glm::vec3 offset, glm::vec3 dir_offset, int frame_nb, glm::vec3 *temporal_framebuffer)
+	glm::vec3 offset, glm::vec3 dir_offset, int frame_nb, glm::vec3 *temporal_framebuffer, bool moved)
 {
 	const int x = blockDim.x * blockIdx.x + threadIdx.x;
 	const int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -178,7 +198,7 @@ kernel(const unsigned int width, const unsigned int height,
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
 	int i = (height - y - 1)*width + x;
-	//temporal_framebuffer[i] *= (frame_nb - 1);
+	temporal_framebuffer[i] *= !moved;
 	temporal_framebuffer[i] += rad;
 
 	rad = temporal_framebuffer[i] / (float)frame_nb;
@@ -206,9 +226,14 @@ inline unsigned int WangHash(unsigned int a)
 
 cudaError_t
 raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
-	const unsigned int width, const unsigned int height, cudaStream_t stream, glm::vec3 offset, glm::vec3 dir_offset, glm::vec3 *temporal_framebuffer)
+	const unsigned int width, const unsigned int height, cudaStream_t stream,
+	glm::vec3 offset, glm::vec3 dir_offset, glm::vec3 *temporal_framebuffer, bool moved)
 {
 	static unsigned int seed = 0;
+
+	if (moved)
+		seed = 0;
+
 	seed++;
 
 	cudaBindSurfaceToArray(surf, array);
@@ -224,7 +249,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height,
-			width / 2, height / 2, scene, WangHash(seed), offset, dir_offset, seed, temporal_framebuffer);
+			width / 2, height / 2, scene, WangHash(seed), offset, dir_offset, seed, temporal_framebuffer, moved);
 
 	return cudaSuccess;
 }
