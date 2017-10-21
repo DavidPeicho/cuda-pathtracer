@@ -1,15 +1,25 @@
 #pragma once
 
-class GPUProcessor
+#include "scene.h"
+
+namespace processor
 {
-  public:
-    GPUProcessor(int w, int h);
+  class GPUProcessor
+  {
+    public:
+      GPUProcessor(scene::Scene& scene, int w, int h);
 
-  public:
-    void
-    run();
+    public:
+      bool
+      init();
 
-  private:
-    int _width;
-    int _height;
-};
+      void
+      run();
+
+    private:
+      scene::Scene &_scene;
+
+      int _width;
+      int _height;
+  };
+} // namespace processor

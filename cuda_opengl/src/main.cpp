@@ -89,13 +89,11 @@ main(int argc, char* argv[])
   scene::Scene scene("assets/cube.obj");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 #ifdef USE_CPU
-  scene.upload(true);
-  CPUProcessor processor(1024, 1024);
+  processor::CPUProcessor processor(scene, 1024, 1024);
 #else
-  scene.upload(false);
-  GPUProcessor processor(1024, 1024);
+  GPUProcessor processor(scene, 1024, 1024);
 #endif
-  if (!scene.ready())
+  if (!processor.init())
   {
     std::cerr << "artracer: obj parsing failed.\n";
     std::cerr << "output: " << scene.error() << std::endl;

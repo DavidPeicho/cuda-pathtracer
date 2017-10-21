@@ -15,7 +15,7 @@ namespace scene
     public:
       void
       upload(bool is_cpu);
-      
+
       void
       release(bool is_cpu);
 

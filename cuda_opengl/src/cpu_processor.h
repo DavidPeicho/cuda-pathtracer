@@ -2,28 +2,37 @@
 
 #include <glad/glad.h>
 
-class CPUProcessor
+#include "scene.h"
+
+namespace processor
 {
-  public:
-    CPUProcessor(int w, int h);
-    ~CPUProcessor();
+  class CPUProcessor
+  {
+    public:
+      CPUProcessor(scene::Scene& scene, int w, int h);
+      ~CPUProcessor();
 
-  public:
-    void
-    run();
+    public:
+      bool
+      init();
 
-  private:
-    int _width;
-    int _height;
+      void
+      run();
 
-    unsigned char *_pixels;
+    private:
+      scene::Scene &_scene;
+      int _width;
+      int _height;
 
-    GLuint _pbo[2];
-    GLuint _shader;
+      unsigned int _pbo_idx;
+      unsigned int _pbo_next_idx;
 
-    GLuint _quadVbo;
-    GLuint _quadEbo;
-    GLuint _quadVao;
-    GLuint _screen_tex;
+      GLuint _pbo[2];
+      GLuint _screen_tex;
 
-};
+      GLuint _shader;
+      GLuint _quadVbo;
+      GLuint _quadEbo;
+      GLuint _quadVao;
+  };
+}  // namespace processor
