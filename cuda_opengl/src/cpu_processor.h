@@ -24,5 +24,6 @@ class CPUProcessor
     GLuint _quadVbo;
     GLuint _quadEbo;
     GLuint _quadVao;
+    GLuint _screen_tex;
 
 };

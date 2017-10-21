@@ -11,8 +11,12 @@ namespace
     {
       "#version 330 core\n"
       "layout (location = 0) in vec2 aPos;"
+
+      "out vec2 vUv;"
+
       "void main()"
       "{"
+          "vUv = (aPos + vec2(1.0)) / 2.0;"
           "gl_Position = vec4(aPos, 0.0, 1.0);"
       "}"
     };
@@ -20,12 +24,15 @@ namespace
     static const char *f_shader_source =
     {
       "#version 330 core\n"
-      
+
+      "in vec2 vUv;"
       "out vec4 FragColor;"
+
+      "uniform sampler2D uTexture;"
 
       "void main()"
       "{"
-          "FragColor = vec4(1.0, 0.0, 0.0, 1.0);"
+          "FragColor = texture(uTexture, vUv);"
       "}"
     };
 
@@ -119,6 +126,18 @@ CPUProcessor::CPUProcessor(int w, int h)
   // Creates VBO hosting the quad vertices
   _quadVao = createQuadVAO(&_quadVbo, &_quadEbo);
 
+  // Creates texture storing the CPU computed
+  // pathtracing image.
+  glGenTextures(1, &_screen_tex);
+  glBindTexture(GL_TEXTURE_2D, _screen_tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0,
+    GL_RGB, GL_UNSIGNED_BYTE, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glBindTexture(GL_TEXTURE_2D, 0);
+
   // Generate ping-pong VBOs
   glGenBuffers(2, &_pbo[0]);
   for (unsigned i = 0; i < 2; ++i)
@@ -129,8 +148,47 @@ CPUProcessor::CPUProcessor(int w, int h)
       _width * _height * 3,
       NULL, GL_DYNAMIC_DRAW
     );
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
   }
-  
+
+  // DEBUG
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, _pbo[0]);
+  GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+  //GLubyte *ptr = new GLubyte[w * h * 3];
+  if (ptr)
+  {
+    //glBindTexture(GL_TEXTURE_2D, _screen_tex);
+    // update data directly on the mapped buffer
+    for (size_t y = 0; y < h; ++y)
+    {
+      size_t i = y * w * 3;
+      if (y % 2 == 0) {
+        for (size_t x = 0; x < w * 3; x += 3) {
+          ptr[i + x] = 255;
+          ptr[i + x + 1] = 0;
+          ptr[i + x + 2] = 0;
+        }
+      }
+      else {
+        for (size_t x = 0; x < w * 3; x += 3) {
+          ptr[i + x] = 0;
+          ptr[i + x + 1] = 0;
+          ptr[i + x + 2] = 128;
+        }
+      }
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, ptr);
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+  }
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+  glBindTexture(GL_TEXTURE_2D, _screen_tex);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, _pbo[0]);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
+    GL_RGB, GL_UNSIGNED_BYTE, 0);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  // END DEBUG
+
 }
 
 CPUProcessor::~CPUProcessor()
@@ -146,6 +204,8 @@ CPUProcessor::run()
 {
   // Draws space-screen quad
   glUseProgram(_shader);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, _screen_tex);
   glBindVertexArray(_quadVao);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
