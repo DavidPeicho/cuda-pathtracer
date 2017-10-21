@@ -177,8 +177,8 @@ main(int argc, char* argv[])
 		double xpos, ypos;
 		glfwGetCursorPos(window, &xpos, &ypos);
 
-		angle.x += 0.03f * float(width / 2 - xpos);
-		angle.y += 0.03f * float(height / 2 - ypos);
+		angle.x -= 0.003f * float(width / 2 - xpos);
+		angle.y -= 0.003f * float(height / 2 - ypos);
 
 		dir_offset = glm::vec3(
 			cos(angle.y) * sin(angle.x),

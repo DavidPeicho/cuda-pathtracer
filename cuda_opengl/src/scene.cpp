@@ -28,7 +28,7 @@ namespace scene
       Camera cam;
       cam.position = glm::vec3(20.f,10.f, 20.0f) - glm::vec3(193.f, 86.f, 215.f) / 10.f;
 
-      cam.fov_x = (170.0 * M_PI) / 180.0;
+      cam.fov_x = (100.0 * M_PI) / 180.0;
       cam.u[0] = 1.0;
       cam.u[1] = 0.0;
       cam.u[2] = 0.0;

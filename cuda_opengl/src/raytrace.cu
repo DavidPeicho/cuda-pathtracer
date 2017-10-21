@@ -104,12 +104,12 @@ intersect(const scene::Ray& r,
 #define M_PI 3.14159265359f
 
 __device__ inline glm::vec3 radiance(scene::Ray& r,
-	const struct scene::SceneData *const scene, curandState* rand_state)
+	const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
 {
 	glm::vec3 mask = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	const int max_bounces = 3;
+	const int max_bounces = 1 + is_static * (static_samples + 1);
 	for (int b = 0; b < max_bounces; b++)
 	{
 		glm::vec3 normal;
@@ -119,18 +119,20 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		glm::vec3 emission = glm::vec3(2.0f);
 		// For energy compensation on Russian roulette
 		glm::vec3 thoughput = glm::vec3(1.0f);
+		glm::vec3 mat_reflectance = glm::vec3(1.0f);
 		float t = 100000;
 		bool light_emitter = false;
 
 		//float intersection = (float)intersect(r, scene, normal, t, light_emitter);
 		if (intersect(r, scene, normal, t, light_emitter))
 		{
-			oriented_normal = glm::dot(normal, r.dir) < 0 ? normal : normal * -1.0f;
+			float cos_theta = glm::dot(normal, r.dir);
+			oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
 
 			//acc += mask * emission * (float)light_emitter * intersection;
 			acc += mask * emission * (float)light_emitter * thoughput;
 
-			float r2 = curand_uniform(rand_state);
+			float r2 = sqrtf(curand_uniform(rand_state));
 			float r1 = 2.0f * M_PI * curand_uniform(rand_state);
 
 			// Russian roulette
@@ -153,7 +155,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			r.dir = d;
 
 			//mask *= intersection * color + (1.0f - intersection) * 1.0f;
-			mask *= color;
+			glm::vec3 BRDF = 2.0f * mat_reflectance * cos_theta * color;
+			mask *= BRDF;
 		}
 	}
 
@@ -180,25 +183,29 @@ kernel(const unsigned int width, const unsigned int height,
 	struct scene::Camera *cam = scene->cam;
 	float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
 
+	glm::vec3 look_at = glm::normalize(cam->dir + dir_offset);
+
 	glm::vec3 cx = glm::vec3(width * cam->fov_x / height, 0.0f, 0.0f);
-	glm::vec3 cy = glm::normalize(glm::cross(cx, cam->dir)) * cam->fov_x;
+	glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * cam->fov_x;
 
 	glm::vec3 rad = glm::vec3(0.0f);
 	scene::Ray r;
-	r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + glm::normalize(cam->dir + dir_offset);
+	r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + look_at;
 	r.dir = glm::normalize(r.dir);
-	r.origin = r.dir * 40.f + cam->position - offset / 10.f;
+	r.origin = r.dir * 40.f + cam->position + offset / 10.f;
 
-	int samples = 2;
+	int is_static = !moved;
+	int static_samples = 1;
+	int samples = 2 + is_static * static_samples;
 	for (int i = 0; i < samples; i++)
-		rad += radiance(r, scene, &rand_state);
+		rad += radiance(r, scene, &rand_state, is_static, static_samples);
 
 	rad /= samples;
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
 	int i = (height - y - 1)*width + x;
-	temporal_framebuffer[i] *= !moved;
+	temporal_framebuffer[i] *= is_static;
 	temporal_framebuffer[i] += rad;
 
 	rad = temporal_framebuffer[i] / (float)frame_nb;

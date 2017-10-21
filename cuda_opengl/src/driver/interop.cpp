@@ -127,7 +127,10 @@ namespace driver
   bool
   Interop::isKeyPressed(const unsigned int key)
   {
-	  return keys[key];
+	  bool k = keys[key];
+	  if (k)
+		  setMoved(true);
+	  return k;
   }
 
   void
