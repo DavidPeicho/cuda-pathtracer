@@ -70,8 +70,6 @@ glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		(driver::Interop* const)glfwGetWindowUserPointer(window);
 
 	interop->setKeyState(key, action != GLFW_RELEASE);
-
-	interop->setMoved(true);
 }
 
 void

@@ -55,7 +55,8 @@ intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, glm::vec3& n, fl
 	return true;
 }
 
-__device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, float& t) {
+__device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, float& t)
+{
 
 	glm::vec3 op = pos - r.origin;
 	float epsilon = 0.01f;
@@ -73,8 +74,9 @@ __device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, f
 
 __device__ inline bool
 intersect(const scene::Ray& r,
-	const struct scene::SceneData *const scene, glm::vec3& n, float& t, bool& light_emitter)
+	const struct scene::SceneData *const scene, glm::vec3& n, float& t, bool& light_emitter, glm::vec3& diff, glm::vec3& l)
 {
+	glm::vec3 light_pos = glm::vec3(0.0f, 0.2f, 0.0f);
 	glm::vec3 vertex[3];
 	for (size_t m = 0; m < scene->meshes.size; ++m)
 	{
@@ -89,11 +91,17 @@ intersect(const scene::Ray& r,
 				vertex[v].z = scene->vertices.data[3 * idx.vertex_index + 2];
 			}
 			if (intersectTriangle(vertex, r, n, t))
+			{
+				diff = glm::vec3(scene->materials.data->diffuse[0],
+					scene->materials.data->diffuse[1],
+					scene->materials.data->diffuse[2]);
 				return true;
+			}
 
-			if (intersectSphere(r, 0.5f, glm::vec3(0.0f, 0.2f, 0.0f), t))
+			if (intersectSphere(r, 0.5f, light_pos, t))
 			{
 				light_emitter = true;
+				l = light_pos;
 				return true;
 			}
 		}
@@ -102,6 +110,57 @@ intersect(const scene::Ray& r,
 }
 
 #define M_PI 3.14159265359f
+
+__device__ inline glm::vec3
+brdf_oren_nayar(float n_dot_v, float n_dot_l, glm::vec3 light_dir, glm::vec3 view_dir,
+						  glm::vec3 n, float roughness, float metalness, glm::vec3 base_color)
+{
+	float angle_v_n = acos(n_dot_v);
+	float angle_l_n = acos(n_dot_l);
+
+	float alpha = max(angle_v_n, angle_l_n);
+	float beta = min(angle_v_n, angle_l_n);
+	float gamma = dot(view_dir - n * n_dot_v, light_dir - n * n_dot_l);
+
+	float roughness_2 = roughness * roughness;
+
+	float A = 1.0 - 0.5 * (roughness_2 / (roughness_2 + 0.57));
+	float B = 0.45 * (roughness_2 / (roughness_2 + 0.09));
+	float C = sin(alpha) * tan(beta);
+
+	float L1 = max(0.0, n_dot_l) * (A + B * max(0.0, gamma) * C);
+
+	glm::vec3 color = base_color;
+	color = glm::mix(color, glm::vec3(0.0), metalness);
+
+	return glm::vec3(glm::vec3(color) * glm::vec3(L1));
+}
+
+__device__ inline glm::vec3
+uncharted_tonemap(glm::vec3 x)
+{
+   const float A = 0.15;
+   const float B = 0.50;
+   const float C = 0.10;
+   const float D = 0.20;
+   const float E = 0.02;
+   const float F = 0.30;
+   const float W = 11.2;
+
+   return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+}
+
+__device__ inline glm::vec3
+exposure(glm::vec3 color)
+{
+  const float exposure_bias = 2.0f;
+  glm::vec3 curr = uncharted_tonemap(exposure_bias * color);
+
+  const glm::vec3 W = glm::vec3(11.2);
+  glm::vec3 white_scale = 1.0f / uncharted_tonemap(W);
+
+  return curr * white_scale;
+}
 
 __device__ inline glm::vec3 radiance(scene::Ray& r,
 	const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
@@ -116,46 +175,58 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		glm::vec3 oriented_normal;
 		glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
 		// Light energy emission
-		glm::vec3 emission = glm::vec3(2.0f);
+		glm::vec3 emission = glm::vec3(5.0f);
 		// For energy compensation on Russian roulette
 		glm::vec3 thoughput = glm::vec3(1.0f);
 		glm::vec3 mat_reflectance = glm::vec3(1.0f);
+		glm::vec3 l;
 		float t = 100000;
 		bool light_emitter = false;
+		glm::vec3 col;
 
 		//float intersection = (float)intersect(r, scene, normal, t, light_emitter);
-		if (intersect(r, scene, normal, t, light_emitter))
+		if (intersect(r, scene, normal, t, light_emitter, col, l))
 		{
 			float cos_theta = glm::dot(normal, r.dir);
+			glm::vec3 light_dir = glm::normalize(l - r.origin);
+			float n_dot_l = glm::dot(normal, light_dir);
 			oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
 
 			//acc += mask * emission * (float)light_emitter * intersection;
 			acc += mask * emission * (float)light_emitter * thoughput;
 
-			float r2 = sqrtf(curand_uniform(rand_state));
-			float r1 = 2.0f * M_PI * curand_uniform(rand_state);
+			float r1 = curand_uniform(rand_state);
+			float phi = 2.0f * M_PI * curand_uniform(rand_state);
 
 			// Russian roulette
 			float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
-			if (r2 > p)
+			if (cos_theta > p)
 				return acc;
 
 			thoughput *= 1 / p;
 
-			float r2_squared = sqrtf(r2);
+			float sin_t = sqrtf(r1);
+			float cos_t = sqrt(1.f - r1);
 
 			glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
 			glm::vec3 v = glm::cross(oriented_normal, u);
 
-			glm::vec3 d = glm::normalize(u * cos(r1) * r2_squared + v * sin(r1) * r2_squared + oriented_normal * sqrtf(1 - r2));
+			//Diffuse hemishphere reflection
+			glm::vec3 d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t  + oriented_normal * cos_t);
+			//Specular model (Snell's law)
+			//glm::vec3 d = r.dir - 2.0f * oriented_normal * cos_theta;
 
+			// Oren-Nayar diffuse
+			//glm::vec3 BRDF = brdf_oren_nayar(cos_theta, n_dot_l, light_dir, r.dir, oriented_normal, 0.1f, 0.99f, color);
 			r.origin += r.dir * t;
 
 			r.origin += oriented_normal * 0.03f;
 			r.dir = d;
 
 			//mask *= intersection * color + (1.0f - intersection) * 1.0f;
+			//Lambert BRDF
 			glm::vec3 BRDF = 2.0f * mat_reflectance * cos_theta * color;
+			//glm::vec3 BRDF = color;
 			mask *= BRDF;
 		}
 	}
@@ -181,12 +252,12 @@ kernel(const unsigned int width, const unsigned int height,
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
 	struct scene::Camera *cam = scene->cam;
-	float screen_dist = half_w / __tanf(cam->fov_x * 0.5);
+	float screen_dist = __tanf(cam->fov_x * 0.5);
 
-	glm::vec3 look_at = glm::normalize(cam->dir + dir_offset);
+	glm::vec3 look_at = glm::normalize(cam->dir - dir_offset);
 
-	glm::vec3 cx = glm::vec3(width * cam->fov_x / height, 0.0f, 0.0f);
-	glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * cam->fov_x;
+	glm::vec3 cx = glm::vec3(width * screen_dist / height, 0.0f, 0.0f);
+	glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * screen_dist;
 
 	glm::vec3 rad = glm::vec3(0.0f);
 	scene::Ray r;
@@ -204,11 +275,14 @@ kernel(const unsigned int width, const unsigned int height,
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
-	int i = (height - y - 1)*width + x;
+	int i = (height - y - 1) * width + x;
 	temporal_framebuffer[i] *= is_static;
 	temporal_framebuffer[i] += rad;
 
 	rad = temporal_framebuffer[i] / (float)frame_nb;
+
+	rad = exposure(rad);
+	rad = glm::pow(rad, glm::vec3(1.0f / 2.2f));
 
 	rgbx.r = rad.x * 255;
 	rgbx.g = rad.y * 255;
