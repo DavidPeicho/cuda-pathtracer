@@ -175,7 +175,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		glm::vec3 oriented_normal;
 		glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
 		// Light energy emission
-		glm::vec3 emission = glm::vec3(5.0f);
+		glm::vec3 emission = glm::vec3(1.0f);
 		// For energy compensation on Russian roulette
 		glm::vec3 thoughput = glm::vec3(1.0f);
 		glm::vec3 mat_reflectance = glm::vec3(1.0f);
@@ -193,7 +193,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
 
 			//acc += mask * emission * (float)light_emitter * intersection;
-			acc += mask * emission * (float)light_emitter * thoughput;
+			acc += emission * (float)light_emitter * thoughput;
 
 			float r1 = curand_uniform(rand_state);
 			float phi = 2.0f * M_PI * curand_uniform(rand_state);
@@ -203,7 +203,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			if (cos_theta > p)
 				return acc;
 
-			thoughput *= 1 / p;
+			thoughput *= 1.f / p;
 
 			float sin_t = sqrtf(r1);
 			float cos_t = sqrt(1.f - r1);
@@ -226,8 +226,9 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			//mask *= intersection * color + (1.0f - intersection) * 1.0f;
 			//Lambert BRDF
 			glm::vec3 BRDF = 2.0f * mat_reflectance * cos_theta * color;
+			float PDF = cos_theta / M_PI;
 			//glm::vec3 BRDF = color;
-			mask *= BRDF;
+			thoughput *= BRDF / PDF;
 		}
 	}
 
