@@ -162,10 +162,29 @@ exposure(glm::vec3 color)
   return curr * white_scale;
 }
 
+__device__ inline glm::vec3
+sample_lights(scene::Ray& r, glm::vec3 l, glm::vec3 color, glm::vec3 emission, float PDF, glm::vec3 normal)
+{
+	// Hardcoded for now, should be cleaned
+	glm::vec3 light_pos = glm::vec3(0.0f, 0.2f, 0.0f);
+	glm::vec3 L = glm::vec3(0.0f);
+	int nb_lights = 1;
+	for (int i = 0; i < nb_lights; i++)
+	{
+		// Hardcoded for now, should be cleaned
+		if (l == light_pos)
+			continue;
+
+		float n_dot_l = glm::dot(normal, l);
+		L += color * n_dot_l * emission / PDF;
+	}
+
+	return L;
+}
+
 __device__ inline glm::vec3 radiance(scene::Ray& r,
 	const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
 {
-	glm::vec3 mask = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	const int max_bounces = 1 + is_static * (static_samples + 1);
@@ -198,13 +217,6 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			float r1 = curand_uniform(rand_state);
 			float phi = 2.0f * M_PI * curand_uniform(rand_state);
 
-			// Russian roulette
-			float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
-			if (cos_theta > p)
-				return acc;
-
-			thoughput *= 1.f / p;
-
 			float sin_t = sqrtf(r1);
 			float cos_t = sqrt(1.f - r1);
 
@@ -212,7 +224,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			glm::vec3 v = glm::cross(oriented_normal, u);
 
 			//Diffuse hemishphere reflection
-			glm::vec3 d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t  + oriented_normal * cos_t);
+			glm::vec3 d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
 			//Specular model (Snell's law)
 			//glm::vec3 d = r.dir - 2.0f * oriented_normal * cos_theta;
 
@@ -224,11 +236,21 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			r.dir = d;
 
 			//mask *= intersection * color + (1.0f - intersection) * 1.0f;
-			//Lambert BRDF
-			glm::vec3 BRDF = 2.0f * mat_reflectance * cos_theta * color;
-			float PDF = cos_theta / M_PI;
+			//Lambert BRDF/PDF
+			glm::vec3 BRDF = color * n_dot_l; // Divided by PI
+			float PDF = cos_theta; // Divided by PI
 			//glm::vec3 BRDF = color;
-			thoughput *= BRDF / PDF;
+			glm::vec3 direct_light = BRDF / PDF;
+			thoughput *= direct_light;
+
+			acc += thoughput * sample_lights(r, l, color, emission, PDF, normal);
+
+			// Russian roulette
+			float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+			if (r1 > p)
+				return acc;
+
+			thoughput *= 1.f / p;
 		}
 	}
 
