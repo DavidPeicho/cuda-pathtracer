@@ -28,6 +28,7 @@
     <ClCompile Include="src\glad.cpp" />
     <ClCompile Include="src\driver\gpu_info.cpp" />
     <ClCompile Include="src\driver\interop.cpp" />
+    <ClCompile Include="src\gpu_processor.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\scene.cpp" />
     <ClCompile Include="src\utils.cpp" />

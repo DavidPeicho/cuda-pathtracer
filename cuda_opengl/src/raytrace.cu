@@ -31,6 +31,23 @@ union rgba_24
 	};
 };
 
+HOST_DEVICE inline scene::Ray
+generateRay(const int x, const int y,
+            const int half_w, const int half_h, scene::Camera *cam)
+{
+  float screen_dist = half_w / std::tan(cam->fov_x * 0.5);
+
+  scene::Ray ray;
+  ray.origin = cam->position;
+
+  glm::vec3 screen_pos = cam->position + (cam->dir * screen_dist)
+    + (cam->u * (float)(x - half_w)) + (cam->v * (float)(y - half_h));
+
+  ray.dir = screen_pos - cam->position;
+  ray.dir = glm::normalize(ray.dir);
+  return ray;
+}
+
 HOST_DEVICE inline bool
 intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, glm::vec3& n, float& t)
 {
@@ -179,6 +196,7 @@ inline unsigned int WangHash(unsigned int a)
 	a = a ^ (a >> 4);
 	a = a * 0x27d4eb2d;
 	a = a ^ (a >> 15);
+
 	return a;
 }
 
@@ -193,7 +211,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32
-	// Block size occupancy 
+	// Block size occupancy
 
 	// TODO: We should get into account GPU info, such as number of registers,
 	// shared memory size, warp size, etc...
@@ -205,4 +223,37 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 			width / 2, height / 2, scene, WangHash(seed));
 
 	return cudaSuccess;
+}
+
+// CPU Implementation: impossible
+
+void
+raytrace_cpu(unsigned char *pixels,
+             const scene::SceneData *const scene,
+             const unsigned int width,
+             const unsigned int height)
+{
+  static unsigned int seed = 0;
+  seed++;
+
+  const int half_w = width / 2.0;
+  const int half_h = height / 2.0;
+
+  scene::Ray ray;
+  for (unsigned int y = 0; y < height; ++y)
+  {
+    for (unsigned int x = 0; x < width; ++x)
+    {
+      ray = generateRay(x, y, half_w, half_h, scene->cam);
+      float t = 100000;
+      glm::vec3 normal;
+      if (intersect(ray, scene, normal, t))
+      {
+        size_t idx = (y * width + x) * 3;
+        pixels[idx] = 255;
+        pixels[idx + 1] = 0;
+        pixels[idx + 2] = 0;
+      }
+    }
+  }
 }

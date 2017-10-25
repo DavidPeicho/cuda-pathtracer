@@ -3,6 +3,8 @@
 
 #include "cpu_processor.h"
 
+#include "raytrace.h"
+
 namespace processor
 {
   namespace
@@ -123,6 +125,11 @@ namespace processor
                 , _pbo_idx(0)
   {
 
+    // DEBUG
+    _width = 64;
+    _height = 64;
+    // END DEBUG
+
     // Creates shader rendering the texture to a
     // space screen quad
     _shader = createQuadShader();
@@ -134,12 +141,12 @@ namespace processor
     // pathtracing image.
     glGenTextures(1, &_screen_tex);
     glBindTexture(GL_TEXTURE_2D, _screen_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, _width, _height, 0,
       GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // Generate ping-pong VBOs
@@ -193,7 +200,7 @@ namespace processor
     if (ptr)
     {
       // TODO: replace this loop by the ratracing
-      for (size_t y = 0; y < _height; ++y)
+      /*for (size_t y = 0; y < _height; ++y)
       {
         size_t i = y * _width * 3;
         if (y % 2 == 0) {
@@ -209,7 +216,8 @@ namespace processor
             ptr[i + x + 2] = 128;
           }
         }
-      }
+      }*/
+      raytrace_cpu(ptr, _scene.getSceneData(), _width, _height);
     }
     glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 

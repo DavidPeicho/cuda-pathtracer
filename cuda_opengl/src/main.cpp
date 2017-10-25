@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
 
+#include <iomanip>
 #include <iostream>
 
 #include "cpu_processor.h"
@@ -74,8 +75,11 @@ main(int argc, char* argv[])
     return 1;
   }
 
+  const int window_w = 512;
+  const int window_h = 512;
+
   GLFWwindow* window;
-  glfw_init(&window, 1024, 1024);
+  glfw_init(&window, window_w, window_h);
 
   // Gets back information about the GPUs.
   driver::GPUInfo gpu_info;
@@ -86,7 +90,7 @@ main(int argc, char* argv[])
 
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene(argv[1]);
-  scene::Scene scene("assets/cube.obj");
+  scene::Scene scene("assets/cube-centered.obj");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 #ifdef USE_CPU
   processor::CPUProcessor processor(scene, 1024, 1024);
@@ -119,9 +123,24 @@ main(int argc, char* argv[])
 	glfwSetWindowUserPointer(window, &interop);
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 
+  double last_time = 0.0;
+  double curr_time = 0.0;
+  double delta = 0.0;
+  double elapsed = 0.0;
+
   cudaError_t cuda_err;
 	while (!glfwWindowShouldClose(window))
 	{
+    curr_time = glfwGetTime();
+    delta = curr_time - last_time;
+    last_time = curr_time;
+
+    if (elapsed >= 2.0)
+    {
+      std::cout << "\rartracer: FPS: " << std::fixed << std::setprecision(3) << (1.0 / delta);
+      elapsed = 0.0;
+    }
+
 		/*interop.getSize(pow2_width, pow2_height);
     cuda_err = interop.map(stream);
 
@@ -136,6 +155,8 @@ main(int argc, char* argv[])
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+
+    elapsed += delta;
 	}
 
 	glfwDestroyWindow(window);

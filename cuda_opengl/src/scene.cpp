@@ -27,7 +27,7 @@ namespace scene
       // DEBUG
       Camera cam;
       cam.position[0] = 0.0;
-      cam.position[2] = 0.0;
+      cam.position[2] = -20.0;
 
       cam.fov_x = (90.0 * M_PI) / 180.0;
       cam.u[0] = 1.0;
@@ -202,6 +202,24 @@ namespace scene
   {
     _scene_data = new SceneData;
     _scene_data->cam = new Camera;
+
+    auto &cam = *_scene_data->cam;
+    // DEBUG
+    cam.position[0] = 0.0;
+    cam.position[1] = -3.0;
+    cam.position[2] = -5.0;
+
+    cam.fov_x = (90.0 * M_PI) / 180.0;
+    cam.u[0] = 1.0;
+    cam.u[1] = 0.0;
+    cam.u[2] = 0.0;
+    cam.v[0] = 0.0;
+    cam.v[1] = 1.0;
+    cam.v[2] = 0.0;
+    cam.u = glm::normalize(cam.u);
+    cam.v = glm::normalize(cam.v);
+    cam.dir = glm::normalize(glm::cross(cam.v, cam.u));
+    // END DEBUG
 
     auto nb_vertices = attrib.vertices.size();
     auto nb_vertices_bytes = nb_vertices * sizeof(tinyobj::real_t);
