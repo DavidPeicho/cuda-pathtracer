@@ -57,6 +57,7 @@ static
 void
 glfw_window_size_callback(GLFWwindow* window, int width, int height)
 {
+  // TODO: Do not use interop anymore
 	driver::Interop* const interop =
 		(driver::Interop* const)glfwGetWindowUserPointer(window);
 
@@ -114,7 +115,7 @@ main(int argc, char* argv[])
   scene::Scene scene("assets/cube-centered.obj");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 #ifdef USE_CPU
-  processor::CPUProcessor processor(scene, 1024, 1024);
+  processor::CPUProcessor processor(scene, window_w, window_h);
 #else
   processor::GPUProcessor processor(scene, window_w, window_h);
 #endif

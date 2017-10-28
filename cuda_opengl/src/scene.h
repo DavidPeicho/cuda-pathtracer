@@ -22,6 +22,11 @@ namespace scene
       const inline struct SceneData *
       getSceneData()
       {
+        // This is gross. But it allows to use CPU / GPU at
+        // the same time.
+        // A better approach would be to use the compile time info.
+        if (_d_scene_data) return _d_scene_data;
+
         return _scene_data;
       }
 
@@ -64,6 +69,7 @@ namespace scene
       std::string _load_error;
 
       struct SceneData *_scene_data;
+      struct SceneData *_d_scene_data;
   };
 
 } // namespace scene

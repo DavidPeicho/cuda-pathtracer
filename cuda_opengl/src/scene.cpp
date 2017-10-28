@@ -151,12 +151,14 @@ namespace scene
         : _filepath(filepath)
         , _uploaded(false)
         , _ready(false)
+        , _d_scene_data(nullptr)
   { }
 
   Scene::Scene(const std::string&& filepath)
         : _filepath(filepath)
         , _uploaded(false)
         , _ready{ false }
+        , _d_scene_data(nullptr)
   { }
 
   void
@@ -276,25 +278,25 @@ namespace scene
   {
     // _sceneData is allocated on the stack,
     // and allows to handle cudaMalloc & cudaFree
+    _scene_data = new SceneData;
 
     //
     // Lines below copy adresses given by the GPU the stack-allocated
     // SceneData struct.
     // Takes also care of making cudaMemcpy of the data.
     //
-    /*upload_camera(_sceneData);
-    upload_attribute(_attrib.vertices, _sceneData.vertices);
-    upload_attribute(_attrib.normals, _sceneData.normals);
-    upload_materials(_materials, _sceneData.materials);
-    upload_meshes(_shapes, _sceneData.meshes);
+    upload_camera(*_scene_data);
+    upload_attribute(attrib.vertices, _scene_data->vertices);
+    upload_attribute(attrib.normals, _scene_data->normals);
+    upload_materials(materials, _scene_data->materials);
+    upload_meshes(shapes, _scene_data->meshes);
     // Now the sceneData struct contains pointers to memory adresses
     // mapped by the GPU, we can send the whole struct to the GPU.
-    cudaMalloc(&_d_sceneData, sizeof(struct SceneData));
+    cudaMalloc(&_d_scene_data, sizeof(struct SceneData));
     cudaThrowError();
-    cudaMemcpy(_d_sceneData, &_sceneData, sizeof(struct SceneData),
+    cudaMemcpy(_d_scene_data, _scene_data, sizeof(struct SceneData),
       cudaMemcpyHostToDevice);
-    cudaThrowError();*/
-
+    cudaThrowError();
   }
 
   void
