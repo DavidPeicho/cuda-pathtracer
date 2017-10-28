@@ -93,7 +93,7 @@ __device__ inline bool
 intersect(const scene::Ray& r,
 	const struct scene::SceneData *const scene, glm::vec3& n, float& t, bool& light_emitter, glm::vec3& diff, glm::vec3& l)
 {
-	glm::vec3 light_pos = glm::vec3(0.0f, 0.2f, 0.0f);
+	glm::vec3 light_pos = glm::vec3(0.0f, -0.1f, 0.0f);
 	glm::vec3 vertex[3];
 	for (size_t m = 0; m < scene->meshes.size; ++m)
 	{
@@ -109,9 +109,9 @@ intersect(const scene::Ray& r,
 			}
 			if (intersectTriangle(vertex, r, n, t))
 			{
-				diff = glm::vec3(scene->materials.data->diffuse[0],
-					scene->materials.data->diffuse[1],
-					scene->materials.data->diffuse[2]);
+        diff.x = scene->materials.data->diffuse[0];
+        diff.y = scene->materials.data->diffuse[1];
+        diff.z = scene->materials.data->diffuse[2];
 				return true;
 			}
 

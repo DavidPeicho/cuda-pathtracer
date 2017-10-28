@@ -88,6 +88,7 @@ namespace scene
       cudaThrowError();
       cudaMemcpy(out_materials.data, tmp_materials, nb_bytes,
         cudaMemcpyHostToDevice);
+      cudaThrowError();
 
       delete tmp_materials;
     }
@@ -127,9 +128,11 @@ namespace scene
         // Copies `indices' to the Mesh struct
         cudaMemcpy(tmp_mesh.indices.data, &mesh.indices[0], nb_bytes_indices,
           cudaMemcpyHostToDevice);
+        cudaThrowError();
         // Copies `material_ids'
         cudaMemcpy(tmp_mesh.material_ids.data, &mesh.material_ids[0],
           nb_bytes_materials, cudaMemcpyHostToDevice);
+        cudaThrowError();
       }
 
       out_meshes.size = nb_meshes;
@@ -137,6 +140,7 @@ namespace scene
       cudaThrowError();
       cudaMemcpy(out_meshes.data, tmp_meshes, nb_bytes,
         cudaMemcpyHostToDevice);
+      cudaThrowError();
 
       delete tmp_meshes;
     }
@@ -288,7 +292,9 @@ namespace scene
     cudaMalloc(&_d_sceneData, sizeof(struct SceneData));
     cudaThrowError();
     cudaMemcpy(_d_sceneData, &_sceneData, sizeof(struct SceneData),
-      cudaMemcpyHostToDevice);*/
+      cudaMemcpyHostToDevice);
+    cudaThrowError();*/
+
   }
 
   void
