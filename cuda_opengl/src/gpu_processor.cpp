@@ -52,6 +52,8 @@ namespace processor
       _height, _stream, offset, dir_offset, _d_temporal_framebuffer, _moved);
     cuda_err = _interop.unmap(_stream);
 
+    this->setMoved(false);
+
     if (this->isKeyPressed(GLFW_KEY_Z))
     offset.z++;
     if (this->isKeyPressed(GLFW_KEY_S))
@@ -64,8 +66,6 @@ namespace processor
     offset.y++;
     if (this->isKeyPressed(GLFW_KEY_LEFT_CONTROL))
     offset.y--;
-
-    this->setMoved(false);
 
     _interop.blit();
     _interop.swap();

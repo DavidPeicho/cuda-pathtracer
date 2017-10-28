@@ -83,6 +83,7 @@ namespace scene
         memcpy(&mat.shininess, &materials[i].shininess, sizeof(Real));
       }
 
+      out_materials.data = tmp_materials;
       out_materials.size = nb_mat;
       cudaMalloc(&out_materials.data, nb_bytes);
       cudaThrowError();
@@ -147,15 +148,17 @@ namespace scene
 
   }
 
-  Scene::Scene(const std::string& filepath)
+  Scene::Scene(const std::string& filepath, const std::string& basedir)
         : _filepath(filepath)
+        , _basedir(basedir)
         , _uploaded(false)
         , _ready(false)
         , _d_scene_data(nullptr)
   { }
 
-  Scene::Scene(const std::string&& filepath)
+  Scene::Scene(const std::string&& filepath, const std::string&& basedir)
         : _filepath(filepath)
+        , _basedir(basedir)
         , _uploaded(false)
         , _ready{ false }
         , _d_scene_data(nullptr)
@@ -172,7 +175,7 @@ namespace scene
     tinyobj::attrib_t attrib;
 
     _ready = tinyobj::LoadObj(&attrib, &shapes,
-      &materials, &_load_error, _filepath.c_str());
+      &materials, &_load_error, _filepath.c_str(), _basedir.c_str());
 
     if (!_ready)
       return;
@@ -279,6 +282,8 @@ namespace scene
     // _sceneData is allocated on the stack,
     // and allows to handle cudaMalloc & cudaFree
     _scene_data = new SceneData;
+
+    auto &test = materials[0];
 
     //
     // Lines below copy adresses given by the GPU the stack-allocated

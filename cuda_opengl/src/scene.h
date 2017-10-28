@@ -9,8 +9,8 @@ namespace scene
   class Scene
   {
     public:
-      Scene(const std::string& filepath);
-      Scene(const std::string&& filepath);
+      Scene(const std::string& filepath, const std::string& basedir);
+      Scene(const std::string&& filepath, const std::string&& basedir);
 
     public:
       void
@@ -64,6 +64,8 @@ namespace scene
 
     private:
       std::string _filepath;
+      std::string _basedir;
+
       bool _uploaded;
       bool _ready;
       std::string _load_error;
