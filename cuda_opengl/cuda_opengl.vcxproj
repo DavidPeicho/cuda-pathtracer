@@ -16,15 +16,19 @@
     <ClInclude Include="src\driver\cuda_helper.h" />
     <ClInclude Include="src\driver\gpu_info.h" />
     <ClInclude Include="src\driver\interop.h" />
+    <ClInclude Include="src\cpu_processor.h" />
+    <ClInclude Include="src\gpu_processor.h" />
     <ClInclude Include="src\raytrace.h" />
     <ClInclude Include="src\scene.h" />
     <ClInclude Include="src\scene_data.h" />
     <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\cpu_processor.cpp" />
     <ClCompile Include="src\glad.cpp" />
     <ClCompile Include="src\driver\gpu_info.cpp" />
     <ClCompile Include="src\driver\interop.cpp" />
+    <ClCompile Include="src\gpu_processor.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\scene.cpp" />
     <ClCompile Include="src\utils.cpp" />

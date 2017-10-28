@@ -31,6 +31,23 @@ union rgba_24
 	};
 };
 
+HOST_DEVICE inline scene::Ray
+generateRay(const int x, const int y,
+            const int half_w, const int half_h, scene::Camera *cam)
+{
+  float screen_dist = half_w / std::tan(cam->fov_x * 0.5);
+
+  scene::Ray ray;
+  ray.origin = cam->position;
+
+  glm::vec3 screen_pos = cam->position + (cam->dir * screen_dist)
+    + (cam->u * (float)(x - half_w)) + (cam->v * (float)(y - half_h));
+
+  ray.dir = screen_pos - cam->position;
+  ray.dir = glm::normalize(ray.dir);
+  return ray;
+}
+
 __device__ inline bool
 intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, glm::vec3& n, float& t)
 {
@@ -183,79 +200,80 @@ sample_lights(scene::Ray& r, glm::vec3 l, glm::vec3 color, glm::vec3 emission, f
 }
 
 __device__ inline glm::vec3 radiance(scene::Ray& r,
-	const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
+  const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
 {
-	glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
+  glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	const int max_bounces = 1 + is_static * (static_samples + 1);
-	for (int b = 0; b < max_bounces; b++)
-	{
-		glm::vec3 normal;
-		glm::vec3 oriented_normal;
-		glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
-		// Light energy emission
-		glm::vec3 emission = glm::vec3(1.0f);
-		// For energy compensation on Russian roulette
-		glm::vec3 thoughput = glm::vec3(1.0f);
-		glm::vec3 mat_reflectance = glm::vec3(1.0f);
-		glm::vec3 l;
-		float t = 100000;
-		bool light_emitter = false;
-		glm::vec3 col;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
+  for (int b = 0; b < max_bounces; b++)
+  {
+    glm::vec3 normal;
+    glm::vec3 oriented_normal;
+    glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
+    // Light energy emission
+    glm::vec3 emission = glm::vec3(1.0f);
+    // For energy compensation on Russian roulette
+    glm::vec3 thoughput = glm::vec3(1.0f);
+    glm::vec3 mat_reflectance = glm::vec3(1.0f);
+    glm::vec3 l;
+    float t = 100000;
+    bool light_emitter = false;
+    glm::vec3 col;
 
-		//float intersection = (float)intersect(r, scene, normal, t, light_emitter);
-		if (intersect(r, scene, normal, t, light_emitter, col, l))
-		{
-			float cos_theta = glm::dot(normal, r.dir);
-			glm::vec3 light_dir = glm::normalize(l - r.origin);
-			float n_dot_l = glm::dot(normal, light_dir);
-			oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
+    //float intersection = (float)intersect(r, scene, normal, t, light_emitter);
+    if (intersect(r, scene, normal, t, light_emitter, col, l))
+    {
+      float cos_theta = glm::dot(normal, r.dir);
+      glm::vec3 light_dir = glm::normalize(l - r.origin);
+      float n_dot_l = glm::dot(normal, light_dir);
+      oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
 
-			//acc += mask * emission * (float)light_emitter * intersection;
-			acc += emission * (float)light_emitter * thoughput;
+      //acc += mask * emission * (float)light_emitter * intersection;
+      acc += emission * (float)light_emitter * thoughput;
 
-			float r1 = curand_uniform(rand_state);
-			float phi = 2.0f * M_PI * curand_uniform(rand_state);
+      float r1 = curand_uniform(rand_state);
+      float phi = 2.0f * M_PI * curand_uniform(rand_state);
 
-			float sin_t = sqrtf(r1);
-			float cos_t = sqrt(1.f - r1);
+      float sin_t = sqrtf(r1);
+      float cos_t = sqrt(1.f - r1);
 
-			glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
-			glm::vec3 v = glm::cross(oriented_normal, u);
+      glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
+      glm::vec3 v = glm::cross(oriented_normal, u);
 
-			//Diffuse hemishphere reflection
-			glm::vec3 d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
-			//Specular model (Snell's law)
-			//glm::vec3 d = r.dir - 2.0f * oriented_normal * cos_theta;
+      //Diffuse hemishphere reflection
+      glm::vec3 d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
+      //Specular model (Snell's law)
+      //glm::vec3 d = r.dir - 2.0f * oriented_normal * cos_theta;
 
-			// Oren-Nayar diffuse
-			//glm::vec3 BRDF = brdf_oren_nayar(cos_theta, n_dot_l, light_dir, r.dir, oriented_normal, 0.1f, 0.99f, color);
-			r.origin += r.dir * t;
+      // Oren-Nayar diffuse
+      //glm::vec3 BRDF = brdf_oren_nayar(cos_theta, n_dot_l, light_dir, r.dir, oriented_normal, 0.1f, 0.99f, color);
+      r.origin += r.dir * t;
 
-			r.origin += oriented_normal * 0.03f;
-			r.dir = d;
+      r.origin += oriented_normal * 0.03f;
+      r.dir = d;
 
-			//mask *= intersection * color + (1.0f - intersection) * 1.0f;
-			//Lambert BRDF/PDF
-			glm::vec3 BRDF = color * n_dot_l; // Divided by PI
-			float PDF = cos_theta; // Divided by PI
-			//glm::vec3 BRDF = color;
-			glm::vec3 direct_light = BRDF / PDF;
-			thoughput *= direct_light;
+      //mask *= intersection * color + (1.0f - intersection) * 1.0f;
+      //Lambert BRDF/PDF
+      glm::vec3 BRDF = color * n_dot_l; // Divided by PI
+      float PDF = cos_theta; // Divided by PI
+                             //glm::vec3 BRDF = color;
+      glm::vec3 direct_light = BRDF / PDF;
+      thoughput *= direct_light;
 
-			acc += thoughput * sample_lights(r, l, color, emission, PDF, normal);
+      acc += thoughput * sample_lights(r, l, color, emission, PDF, normal);
 
-			// Russian roulette
-			float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
-			if (r1 > p)
-				return acc;
+      // Russian roulette
+      float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+      if (r1 > p)
+        return acc;
 
-			thoughput *= 1.f / p;
-		}
-	}
+      thoughput *= 1.f / p;
+    }
+  }
 
-	return acc;
+  return acc;
 }
+
 
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
@@ -269,7 +287,7 @@ kernel(const unsigned int width, const unsigned int height,
 	const unsigned int tid = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
 	union rgba_24 rgbx;
-	rgbx.a = 0;
+	rgbx.a = 0.0;
 
 	curandState rand_state;
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
@@ -295,7 +313,6 @@ kernel(const unsigned int width, const unsigned int height,
 		rad += radiance(r, scene, &rand_state, is_static, static_samples);
 
 	rad /= samples;
-
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
 	int i = (height - y - 1) * width + x;
@@ -325,6 +342,7 @@ inline unsigned int WangHash(unsigned int a)
 	a = a ^ (a >> 4);
 	a = a * 0x27d4eb2d;
 	a = a ^ (a >> 15);
+
 	return a;
 }
 
@@ -344,12 +362,13 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32
-	// Block size occupancy 
+	// Block size occupancy
 
 	// TODO: We should get into account GPU info, such as number of registers,
 	// shared memory size, warp size, etc...
 	dim3 threads_per_block(16, 16);
 	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
+
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height,

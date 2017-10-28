@@ -5,15 +5,17 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
-
 #include <glm/common.hpp>
 #include <glm/glm.hpp>
 
+#include <iomanip>
 #include <iostream>
 
+#include "cpu_processor.h"
 #include "driver/cuda_helper.h"
 #include "driver/gpu_info.h"
 #include "driver/interop.h"
+#include "gpu_processor.h"
 #include "raytrace.h"
 #include "scene.h"
 #include "utils.h"
@@ -66,59 +68,62 @@ glfw_window_size_callback(GLFWwindow* window, int width, int height)
 void
 glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	driver::Interop* const interop =
-		(driver::Interop* const)glfwGetWindowUserPointer(window);
+#ifdef USE_CPU
+  processor::CPUProcessor* const processor =
+    (processor::CPUProcessor* const)glfwGetWindowUserPointer(window);
+#else
+  processor::GPUProcessor* const processor =
+    (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
+#endif
 
-	interop->setKeyState(key, action != GLFW_RELEASE);
+	processor->setKeyState(key, action != GLFW_RELEASE);
 }
 
 void
 glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
-	driver::Interop* const interop =
-		(driver::Interop* const)glfwGetWindowUserPointer(window);
+#ifdef USE_CPU
+  processor::CPUProcessor* const processor =
+    (processor::CPUProcessor* const)glfwGetWindowUserPointer(window);
+#else
+  processor::GPUProcessor* const processor =
+    (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
+#endif
 
-	interop->setMoved(true);
+	processor->setMoved(true);
 }
 
 int
 main(int argc, char* argv[])
 {
-	if (argc < 2)
-	{
-		std::cerr << "artracer: missing scene argument.\n";
-		std::cerr << "usage: artracer [OBJ SCENE]" << std::endl;
-		return 1;
-	}
+  if (argc < 2)
+  {
+    std::cerr << "artracer: missing scene argument.\n";
+    std::cerr << "usage: artracer [OBJ SCENE]" << std::endl;
+    return 1;
+  }
 
-	// Gets back information about the GPUs.
-	driver::GPUInfo gpu_info;
-	cudaSetDevice(gpu_info.getCUDAGPU().device_id);
+  const int window_w = 1024;
+  const int window_h = 1024;
 
-	// Logs information about the GPUs.
-	std::cout << gpu_info.getProfile() << std::endl;
+  GLFWwindow* window;
+  glfw_init(&window, window_w, window_h);
 
-	// Parses selected scene using TinyObjLoader.
-	//scene::Scene scene(argv[1]);
-	scene::Scene scene(argv[1]);
-	if (!scene.ready())
-	{
-		std::cerr << "artracer: obj parsing failed.\n";
-		std::cerr << "output: " << scene.error() << std::endl;
-		return 1;
-	}
-	std::cout << "uploading .obj scene to the GPU..." << std::endl;
-	scene.upload();
-
-	// Logs information about the GPUs, allows to see
-	// how much memory is consummed by the obj scene.
-	std::cout << gpu_info.getProfile() << std::endl;
-
-	GLFWwindow* window;
-	glfw_init(&window, 1024, 1024);
-
-	cudaStream_t stream;
-	cudaStreamCreateWithFlags(&stream, cudaStreamDefault);
+  // Parses selected scene using TinyObjLoader.
+  //scene::Scene scene(argv[1]);
+  scene::Scene scene("assets/cube-centered.obj");
+  std::cout << "uploading .obj scene to the GPU..." << std::endl;
+#ifdef USE_CPU
+  processor::CPUProcessor processor(scene, 1024, 1024);
+#else
+  processor::GPUProcessor processor(scene, window_w, window_h);
+#endif
+  if (!processor.init())
+  {
+    std::cerr << "artracer: obj parsing failed.\n";
+    std::cerr << "output: " << scene.error() << std::endl;
+    return 1;
+  }
 
 	int width = 0;
 	int height = 0;
@@ -127,72 +132,45 @@ main(int argc, char* argv[])
 	unsigned int pow2_width = utils::nextPow2(width);
 	unsigned int pow2_height = utils::nextPow2(height);
 
-	driver::Interop interop(pow2_width, pow2_height);
-
-	glfwSetWindowUserPointer(window, &interop);
+	glfwSetWindowUserPointer(window, &processor);
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 	glfwSetKeyCallback(window, glfw_key_callback);
 	glfwSetCursorPosCallback(window, glfw_mouse_callback);
 
+  double last_time = 0.0;
+  double curr_time = 0.0;
+  double delta = 0.0;
+  double elapsed = 0.0;
 
-	cudaError_t cuda_err;
-	glm::vec3 offset = glm::vec3(0.0f);
-	glm::vec2 angle = glm::vec2(0.0f);
-	glm::vec3 dir_offset = glm::vec3(0.0f);
-
-	glm::vec3* temporal_framebuffer;
-	cudaMalloc(&temporal_framebuffer, width * height * sizeof(glm::vec3));
-
+  cudaError_t cuda_err;
 	while (!glfwWindowShouldClose(window))
 	{
-		interop.getSize(pow2_width, pow2_height);
-		cuda_err = interop.map(stream);
+    curr_time = glfwGetTime();
+    delta = curr_time - last_time;
+    last_time = curr_time;
 
-		cuda_err = raytrace(interop.getArray(), scene.getDevicePointer(), width, height, stream, offset, dir_offset, temporal_framebuffer, interop.getMoved());
-		cuda_err = interop.unmap(stream);
+    if (elapsed >= 2.0)
+    {
+      std::cout << "\rartracer: FPS: " << std::fixed << std::setprecision(3) << (1.0 / delta);
+      elapsed = 0.0;
+    }
 
-		interop.setMoved(false);
-
-		interop.blit();
-		interop.swap();
+    processor.run();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 
-		if (interop.isKeyPressed(GLFW_KEY_Z))
-			offset.z++;
-		if (interop.isKeyPressed(GLFW_KEY_S))
-			offset.z--;
-		if (interop.isKeyPressed(GLFW_KEY_D))
-			offset.x++;
-		if (interop.isKeyPressed(GLFW_KEY_Q))
-			offset.x--;
-		if (interop.isKeyPressed(GLFW_KEY_SPACE))
-			offset.y++;
-		if (interop.isKeyPressed(GLFW_KEY_LEFT_CONTROL))
-			offset.y--;
-
 		double xpos, ypos;
 		glfwGetCursorPos(window, &xpos, &ypos);
 
-		angle.x -= 0.003f * float(width / 2 - xpos);
-		angle.y -= 0.003f * float(height / 2 - ypos);
-
-		dir_offset = glm::vec3(
-			cos(angle.y) * sin(angle.x),
-			sin(angle.y),
-			cos(angle.y) * cos(angle.x)
-		);
-
-		dir_offset = glm::normalize(dir_offset);
+    processor.setMousePos(xpos, ypos);
 
 		glfwSetCursorPos(window, width / 2, height / 2);
+    elapsed += delta;
 	}
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
-
-	cudaFree(temporal_framebuffer);
 
 	cudaDeviceReset();
 	//scene.release();

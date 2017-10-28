@@ -40,11 +40,6 @@ namespace driver
       cudaError_t
       setSize(const unsigned int w, const unsigned int h);
 
-	  void
-	  setKeyState(const unsigned int key, bool state);
-	  bool
-	  isKeyPressed(const unsigned int key);
-
       inline int
       getIndex()
       {
@@ -57,18 +52,6 @@ namespace driver
         return _d_ca[_index];
       }
 
-      inline bool
-      getMoved()
-      {
-        return _moved;
-      }
-
-      inline void
-      setMoved(bool moved)
-      {
-		  _moved = moved;
-      }
-
       void
       getSize(unsigned int& w, unsigned int& h);
 
@@ -76,16 +59,12 @@ namespace driver
       unsigned int _width;
       unsigned int _height;
 
-	  bool _moved;
-
       bool _allocated;
-      
+
       int _index;
       GLuint _fb[2];
       GLuint _rb[2];
       cudaGraphicsResource *_d_cgr[2];
       cudaArray *_d_ca[2];
-
-	  bool keys[65536];
   };
 } // namespace driver
