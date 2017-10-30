@@ -6,11 +6,13 @@
 
 namespace scene
 {
+  // TODO: Remove CPU usage which makes a lot of garbage
+  // as we do not support CPU anymore.
   class Scene
   {
     public:
-      Scene(const std::string& filepath, const std::string& basedir);
-      Scene(const std::string&& filepath, const std::string&& basedir);
+      Scene(const std::string& filepath);
+      Scene(const std::string&& filepath);
 
     public:
       void
@@ -20,14 +22,27 @@ namespace scene
       release(bool is_cpu);
 
       const inline struct SceneData *
-      getSceneData()
+      getScenePointer()
       {
-        // This is gross. But it allows to use CPU / GPU at
-        // the same time.
-        // A better approach would be to use the compile time info.
-        if (_d_scene_data) return _d_scene_data;
-
         return _scene_data;
+      }
+
+      struct Camera *
+      getCamPointer()
+      {
+        return _camera;
+      }
+
+      struct Camera *
+      getUploadedCamPointer()
+      {
+        return _d_camera;
+      }
+
+      const inline struct SceneData *
+      getUploadedScenePointer()
+      {
+        return _d_scene_data;
       }
 
       inline bool
@@ -47,24 +62,15 @@ namespace scene
       init(const char* filepath);
 
       void
-      upload_cpu(const std::vector<tinyobj::shape_t> &shapes,
-        const std::vector<tinyobj::material_t>& materials,
-        const tinyobj::attrib_t attrib);
-
-      void
       upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
         const std::vector<tinyobj::material_t>& materials,
         const tinyobj::attrib_t attrib);
-
-      void
-      release_cpu();
 
       void
       release_gpu();
 
     private:
       std::string _filepath;
-      std::string _basedir;
 
       bool _uploaded;
       bool _ready;
@@ -72,6 +78,8 @@ namespace scene
 
       struct SceneData *_scene_data;
       struct SceneData *_d_scene_data;
+      struct Camera *_camera;
+      struct Camera *_d_camera;
   };
 
 } // namespace scene

@@ -69,13 +69,10 @@ glfw_window_size_callback(GLFWwindow* window, int width, int height)
 void
 glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-#ifdef USE_CPU
-  processor::CPUProcessor* const processor =
-    (processor::CPUProcessor* const)glfwGetWindowUserPointer(window);
-#else
   processor::GPUProcessor* const processor =
     (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
-#endif
+
+  if (key < 0 || key >= 1024) return;
 
 	processor->setKeyState(key, action != GLFW_RELEASE);
 }
@@ -83,15 +80,11 @@ glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void
 glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
-#ifdef USE_CPU
-  processor::CPUProcessor* const processor =
-    (processor::CPUProcessor* const)glfwGetWindowUserPointer(window);
-#else
   processor::GPUProcessor* const processor =
     (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
-#endif
 
 	processor->setMoved(true);
+  processor->setMousePos(xpos, ypos);
 }
 
 int
@@ -112,13 +105,11 @@ main(int argc, char* argv[])
 
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene(argv[1]);
-  scene::Scene scene("assets/cube-centered.obj", "assets/");
+  scene::Scene scene("assets/cube.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
-#ifdef USE_CPU
-  processor::CPUProcessor processor(scene, window_w, window_h);
-#else
+
   processor::GPUProcessor processor(scene, window_w, window_h);
-#endif
+
   if (!processor.init())
   {
     std::cerr << "artracer: obj parsing failed.\n";
@@ -150,21 +141,16 @@ main(int argc, char* argv[])
     delta = curr_time - last_time;
     last_time = curr_time;
 
-    if (elapsed >= 2.0)
+    if (elapsed >= 5.0)
     {
-      std::cout << "\rartracer: FPS: " << std::fixed << std::setprecision(3) << (1.0 / delta);
+      std::cout << "artracer: FPS: " << std::fixed << std::setprecision(3) << (1.0 / delta) << std::endl;
       elapsed = 0.0;
     }
 
-    processor.run();
+    processor.run(delta);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
-
-		double xpos, ypos;
-		glfwGetCursorPos(window, &xpos, &ypos);
-
-    processor.setMousePos(xpos, ypos);
 
 		glfwSetCursorPos(window, width / 2, height / 2);
     elapsed += delta;

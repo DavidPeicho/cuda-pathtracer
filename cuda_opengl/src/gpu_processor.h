@@ -24,7 +24,7 @@ namespace processor
       init();
 
       void
-      run();
+      run(float delta);
 
       void
       setKeyState(const unsigned int key, bool state);

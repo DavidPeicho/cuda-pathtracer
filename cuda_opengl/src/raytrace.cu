@@ -109,9 +109,11 @@ intersect(const scene::Ray& r,
 			}
 			if (intersectTriangle(vertex, r, n, t))
 			{
-        diff.x = scene->materials.data->diffuse[0];
-        diff.y = scene->materials.data->diffuse[1];
-        diff.z = scene->materials.data->diffuse[2];
+        int mat_idx = mesh.material_ids.data[mat_idx];
+        const scene::Material &const mat = scene->materials.data[mat_idx];
+        diff.x = mat.diffuse[0];
+        diff.y = mat.diffuse[1];
+        diff.z = mat.diffuse[2];
 				return true;
 			}
 
@@ -203,8 +205,14 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
 {
   glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
+  glm::vec3 normal, col, l;
+  float t = 0;
+  bool light;
 
-  const int max_bounces = 1 + is_static * (static_samples + 1);
+  if (intersect(r, scene, normal, t, light, col, l))
+    return glm::vec3(1.0, 0.0, 0.0);
+
+  /*const int max_bounces = 1 + is_static * (static_samples + 1);
   for (int b = 0; b < max_bounces; b++)
   {
     glm::vec3 normal;
@@ -269,7 +277,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
       thoughput *= 1.f / p;
     }
-  }
+  }*/
 
   return acc;
 }
@@ -301,28 +309,30 @@ kernel(const unsigned int width, const unsigned int height,
 	glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * screen_dist;
 
 	glm::vec3 rad = glm::vec3(0.0f);
-	scene::Ray r;
-	r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + look_at;
+	scene::Ray r = generateRay(x, y, half_w, half_h, scene->cam);
+	/*r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + look_at;
 	r.dir = glm::normalize(r.dir);
-	r.origin = r.dir * 40.f + cam->position + offset / 10.f;
+	r.origin = r.dir * 40.f + cam->position + offset / 10.f;*/
 
 	int is_static = !moved;
 	int static_samples = 1;
 	int samples = 2 + is_static * static_samples;
-	for (int i = 0; i < samples; i++)
-		rad += radiance(r, scene, &rand_state, is_static, static_samples);
+	/*for (int i = 0; i < samples; i++)
+		rad += radiance(r, scene, &rand_state, is_static, static_samples);*/
 
-	rad /= samples;
+	//rad /= samples;
+  rad += radiance(r, scene, &rand_state, is_static, static_samples);
+
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
-	int i = (height - y - 1) * width + x;
+	/*int i = (height - y - 1) * width + x;
 	temporal_framebuffer[i] *= is_static;
 	temporal_framebuffer[i] += rad;
 
 	rad = temporal_framebuffer[i] / (float)frame_nb;
 
 	rad = exposure(rad);
-	rad = glm::pow(rad, glm::vec3(1.0f / 2.2f));
+	rad = glm::pow(rad, glm::vec3(1.0f / 2.2f));*/
 
 	rgbx.r = rad.x * 255;
 	rgbx.g = rad.y * 255;
@@ -368,7 +378,6 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 	// shared memory size, warp size, etc...
 	dim3 threads_per_block(16, 16);
 	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
-
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height,

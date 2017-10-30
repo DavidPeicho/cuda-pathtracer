@@ -25,6 +25,7 @@ namespace scene
     struct Buffer<tinyobj::real_t> vertices;
     struct Buffer<tinyobj::real_t> normals;
     struct Buffer<struct Material> materials;
+    struct Buffer<struct LightProp> lights;
   };
 
   struct Material
@@ -35,6 +36,12 @@ namespace scene
     tinyobj::real_t transmittance[3];
     tinyobj::real_t emission[3];
     tinyobj::real_t shininess;
+  };
+
+  struct LightProp
+  {
+    tinyobj::real_t color[3];
+    glm::vec3 vec;
   };
 
   struct Camera

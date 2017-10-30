@@ -24,8 +24,11 @@ namespace processor
     std::cout << _gpu_info.getProfile() << std::endl;
 
     cudaStreamCreateWithFlags(&_stream, cudaStreamDefault);
-
     cudaMalloc(&_d_temporal_framebuffer, _width * _height * sizeof(glm::vec3));
+
+    // Initializes all keys to released
+    for (size_t i = 0; i < 65536; ++i)
+      _keys[i] = false;
   }
 
   bool
@@ -37,35 +40,31 @@ namespace processor
   }
 
   void
-  GPUProcessor::run()
+  GPUProcessor::run(float delta)
   {
-    glClearColor(1.0, 1.0, 1.0, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
-
     unsigned int pow2_width = 0;
     unsigned int pow2_height = 0;
     _interop.getSize(pow2_width, pow2_height);
-    cudaError_t cuda_err = _interop.map(_stream);
 
-    cuda_err = _interop.map(_stream);
-    cuda_err = raytrace(_interop.getArray(), _scene.getSceneData(), _width,
-      _height, _stream, offset, dir_offset, _d_temporal_framebuffer, _moved);
+    cudaError_t cuda_err = _interop.map(_stream);
+    raytrace(_interop.getArray(), _scene.getUploadedScenePointer(), _width,
+        _height, _stream, offset, dir_offset, _d_temporal_framebuffer, _moved);
     cuda_err = _interop.unmap(_stream);
 
     this->setMoved(false);
 
-    if (this->isKeyPressed(GLFW_KEY_Z))
-    offset.z++;
-    if (this->isKeyPressed(GLFW_KEY_S))
-    offset.z--;
-    if (this->isKeyPressed(GLFW_KEY_D))
-    offset.x++;
-    if (this->isKeyPressed(GLFW_KEY_Q))
-    offset.x--;
-    if (this->isKeyPressed(GLFW_KEY_SPACE))
-    offset.y++;
-    if (this->isKeyPressed(GLFW_KEY_LEFT_CONTROL))
-    offset.y--;
+    auto *cam = _scene.getCamPointer();
+
+    if (this->isKeyPressed(GLFW_KEY_W)) cam->position.z -= delta;
+    if (this->isKeyPressed(GLFW_KEY_Z)) cam->position.z += delta;
+    if (this->isKeyPressed(GLFW_KEY_A)) cam->position.x -= delta;
+    if (this->isKeyPressed(GLFW_KEY_D)) cam->position.x += delta;
+
+    if (_moved)
+    {
+      cudaMemcpy(_scene.getUploadedCamPointer(), cam,
+        sizeof(scene::Camera), cudaMemcpyHostToDevice);
+    }
 
     _interop.blit();
     _interop.swap();
@@ -81,8 +80,7 @@ namespace processor
   GPUProcessor::isKeyPressed(const unsigned int key)
   {
     bool k = _keys[key];
-    if (k)
-      this->setMoved(true);
+    if (k) this->setMoved(true);
     return k;
   }
 
