@@ -109,7 +109,7 @@ intersect(const scene::Ray& r,
 			}
 			if (intersectTriangle(vertex, r, n, t))
 			{
-        int mat_idx = mesh.material_ids.data[mat_idx];
+        int mat_idx = mesh.material_ids.data[i / 3];
         const scene::Material &const mat = scene->materials.data[mat_idx];
         diff.x = mat.diffuse[0];
         diff.y = mat.diffuse[1];
@@ -210,9 +210,10 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   bool light;
 
   if (intersect(r, scene, normal, t, light, col, l))
-    return glm::vec3(1.0, 0.0, 0.0);
+    return col;
 
-  /*const int max_bounces = 1 + is_static * (static_samples + 1);
+  return acc;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
   for (int b = 0; b < max_bounces; b++)
   {
     glm::vec3 normal;
@@ -277,11 +278,10 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
       thoughput *= 1.f / p;
     }
-  }*/
+  }
 
   return acc;
 }
-
 
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
@@ -317,22 +317,22 @@ kernel(const unsigned int width, const unsigned int height,
 	int is_static = !moved;
 	int static_samples = 1;
 	int samples = 2 + is_static * static_samples;
-	/*for (int i = 0; i < samples; i++)
-		rad += radiance(r, scene, &rand_state, is_static, static_samples);*/
+	for (int i = 0; i < samples; i++)
+		rad += radiance(r, scene, &rand_state, is_static, static_samples);
 
-	//rad /= samples;
+	rad /= samples;
   rad += radiance(r, scene, &rand_state, is_static, static_samples);
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
-	/*int i = (height - y - 1) * width + x;
+	int i = (height - y - 1) * width + x;
 	temporal_framebuffer[i] *= is_static;
 	temporal_framebuffer[i] += rad;
 
 	rad = temporal_framebuffer[i] / (float)frame_nb;
 
 	rad = exposure(rad);
-	rad = glm::pow(rad, glm::vec3(1.0f / 2.2f));*/
+	rad = glm::pow(rad, glm::vec3(1.0f / 2.2f));
 
 	rgbx.r = rad.x * 255;
 	rgbx.g = rad.y * 255;

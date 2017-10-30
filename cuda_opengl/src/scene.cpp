@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -56,7 +57,25 @@ namespace scene
       return true;
     }
 
-    void parse_scene(std::string filename, scene::SceneData &out_scene, std::string& objfile)
+    bool parse_camera(scene::Camera &cam, std::stringstream& iss)
+    {
+      if (!parse_double3(cam.position, iss)) return false;
+      if (!parse_double3(cam.u, iss)) return false;
+      if (!parse_double3(cam.v, iss)) return false;
+
+      if (iss.peek() == std::char_traits<char>::eof()) return false;
+
+      cam.u = glm::normalize(cam.u);
+      cam.v = glm::normalize(cam.v);
+
+      iss >> cam.fov_x;
+      cam.fov_x = (cam.fov_x * M_PI) / 180.0;
+      cam.dir = glm::cross(cam.u, cam.v);
+      return true;
+    }
+
+    void parse_scene(std::string filename, scene::SceneData &out_scene,
+      scene::Camera &cam, std::string& objfile)
     {
       std::ifstream file;
       file.open(filename);
@@ -71,8 +90,11 @@ namespace scene
       std::string token;
       while (std::getline(file, line))
       {
+        if (line.empty()) continue;
+
         std::stringstream iss(line);
         iss >> token;
+
         if (token == "p_light")
         {
           LightProp plight;
@@ -88,12 +110,17 @@ namespace scene
             throw std::runtime_error("parse_scene(): error parsing scene file name.");
           iss >> objfile;
         }
+        else if (token == "camera")
+        {
+          if (!parse_camera(cam, iss))
+            throw std::runtime_error("parse_scene(): error parsing the camera.");
+        }
       }
 
-      // Copies lights back to CUDA
       if (light_vec.size() == 0)
         return;
 
+      // Copies lights back to CUDA
       const LightProp *lights = &light_vec[0];
       size_t nb_bytes_lights = light_vec.size() * sizeof(LightProp);
       out_scene.lights.size = light_vec.size();
@@ -253,7 +280,7 @@ namespace scene
     std::string mtl_dir = "";
     std::string full_obj_path = "";
 
-    parse_scene(_filepath, *_scene_data, objfilepath);
+    parse_scene(_filepath, *_scene_data, *_camera, objfilepath);
 
     std::string::size_type pos = _filepath.find('/');
     if (pos != std::string::npos)
@@ -301,7 +328,7 @@ namespace scene
   {
 
     // DEBUG
-    _camera->position = glm::vec3(20.f, 10.f, 20.0f) - glm::vec3(193.f, 86.f, 215.f) / 10.f;
+    /*_camera->position = glm::vec3(20.f, 10.f, 20.0f) - glm::vec3(193.f, 86.f, 215.f) / 10.f;
     _camera->fov_x = (100.0 * M_PI) / 180.0;
     _camera->u[0] = 1.0;
     _camera->u[1] = 0.0;
@@ -311,7 +338,7 @@ namespace scene
     _camera->v[2] = 0.0;
     _camera->u = glm::normalize(_camera->u);
     _camera->v = glm::normalize(_camera->v);
-    _camera->dir = glm::normalize(glm::vec3(0.f, -0.1f, .1f));
+    _camera->dir = glm::normalize(glm::vec3(0.f, -0.1f, .1f));*/
     // END DEBUG
 
     //

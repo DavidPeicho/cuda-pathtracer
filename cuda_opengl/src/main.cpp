@@ -105,7 +105,7 @@ main(int argc, char* argv[])
 
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene(argv[1]);
-  scene::Scene scene("assets/cube.scene");
+  scene::Scene scene("assets/cornell.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
   processor::GPUProcessor processor(scene, window_w, window_h);
