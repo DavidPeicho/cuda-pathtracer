@@ -131,19 +131,6 @@ namespace scene
       cudaThrowError();
     }
 
-    void upload_camera(struct SceneData &out_scene, struct Camera *cam, struct Camera **d_cam)
-    {
-      cudaMalloc(&out_scene.cam, sizeof (struct Camera));
-      cudaMemcpy(out_scene.cam, cam, sizeof (struct Camera),
-        cudaMemcpyHostToDevice);
-      cudaThrowError();
-
-      // Keeps reference on the camera to later update
-      // it easily with cudaMemcpy. Without this, we would
-      // have to cudaMemcpy from device to host to get back the pointer.
-      *d_cam = out_scene.cam;
-    }
-
     void upload_attribute(const std::vector<Real> &attribute,
       struct Buffer<Real>& out_buffer)
     {
@@ -346,7 +333,6 @@ namespace scene
     // SceneData struct.
     // Takes also care of making cudaMemcpy of the data.
     //
-    upload_camera(*_scene_data, _camera, &_d_camera);
     upload_attribute(attrib.vertices, _scene_data->vertices);
     upload_attribute(attrib.normals, _scene_data->normals);
     upload_materials(materials, _scene_data->materials);
@@ -363,7 +349,7 @@ namespace scene
   void
   Scene::release_gpu()
   {
-    delete _scene_data->cam;
+    delete _camera;
     delete _scene_data->lights.data;
 
     delete _scene_data;

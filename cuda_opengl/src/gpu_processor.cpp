@@ -2,6 +2,9 @@
 #include <iostream>
 #include <glad/glad.h>
 #include <GLFW\glfw3.h>
+
+#include "driver/cuda_helper.h"
+
 #include "gpu_processor.h"
 #include "raytrace.h"
 
@@ -46,25 +49,20 @@ namespace processor
     unsigned int pow2_height = 0;
     _interop.getSize(pow2_width, pow2_height);
 
+    auto *cam = _scene.getCamPointer();
     cudaError_t cuda_err = _interop.map(_stream);
-    raytrace(_interop.getArray(), _scene.getUploadedScenePointer(), _width,
-        _height, _stream, offset, dir_offset, _d_temporal_framebuffer, _moved);
+    raytrace(_interop.getArray(), _scene.getUploadedScenePointer(), cam, _width,
+        _height, _stream, _d_temporal_framebuffer, _moved);
     cuda_err = _interop.unmap(_stream);
 
     this->setMoved(false);
 
-    auto *cam = _scene.getCamPointer();
+    cam->position.z -= 0.05;
 
     if (this->isKeyPressed(GLFW_KEY_W)) cam->position.z -= delta;
     if (this->isKeyPressed(GLFW_KEY_Z)) cam->position.z += delta;
     if (this->isKeyPressed(GLFW_KEY_A)) cam->position.x -= delta;
     if (this->isKeyPressed(GLFW_KEY_D)) cam->position.x += delta;
-
-    if (_moved)
-    {
-      cudaMemcpy(_scene.getUploadedCamPointer(), cam,
-        sizeof(scene::Camera), cudaMemcpyHostToDevice);
-    }
 
     _interop.blit();
     _interop.swap();

@@ -33,12 +33,6 @@ namespace scene
         return _camera;
       }
 
-      struct Camera *
-      getUploadedCamPointer()
-      {
-        return _d_camera;
-      }
-
       const inline struct SceneData *
       getUploadedScenePointer()
       {
@@ -76,10 +70,9 @@ namespace scene
       bool _ready;
       std::string _load_error;
 
+      struct Camera *_camera;
       struct SceneData *_scene_data;
       struct SceneData *_d_scene_data;
-      struct Camera *_camera;
-      struct Camera *_d_camera;
   };
 
 } // namespace scene

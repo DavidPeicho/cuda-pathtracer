@@ -14,6 +14,8 @@
 #include "utils.h"
 #include "scene_data.h"
 
+#include <iostream>
+
 //#define EPSILON 0.0000001;
 
 surface<void, cudaSurfaceType2D> surf;
@@ -33,17 +35,17 @@ union rgba_24
 
 HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
-            const int half_w, const int half_h, scene::Camera *cam)
+            const int half_w, const int half_h, const scene::Camera &cam)
 {
-  float screen_dist = half_w / std::tan(cam->fov_x * 0.5);
+  float screen_dist = half_w / std::tan(cam.fov_x * 0.5);
 
   scene::Ray ray;
-  ray.origin = cam->position;
+  ray.origin = cam.position;
 
-  glm::vec3 screen_pos = cam->position + (cam->dir * screen_dist)
-    + (cam->u * (float)(x - half_w)) + (cam->v * (float)(y - half_h));
+  glm::vec3 screen_pos = cam.position + (cam.dir * screen_dist)
+    + (cam.u * (float)(x - half_w)) + (cam.v * (float)(y - half_h));
 
-  ray.dir = screen_pos - cam->position;
+  ray.dir = screen_pos - cam.position;
   ray.dir = glm::normalize(ray.dir);
   return ray;
 }
@@ -202,7 +204,8 @@ sample_lights(scene::Ray& r, glm::vec3 l, glm::vec3 color, glm::vec3 emission, f
 }
 
 __device__ inline glm::vec3 radiance(scene::Ray& r,
-  const struct scene::SceneData *const scene, curandState* rand_state, int is_static, int static_samples)
+  const struct scene::SceneData *const scene, const scene::Camera * const cam,
+  curandState* rand_state, int is_static, int static_samples)
 {
   glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
   glm::vec3 normal, col, l;
@@ -210,10 +213,10 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   bool light;
 
   if (intersect(r, scene, normal, t, light, col, l))
-    return col;
+    return glm::vec3(cam->position.z, 0.0, 0.0);
 
   return acc;
-  const int max_bounces = 1 + is_static * (static_samples + 1);
+  /*const int max_bounces = 1 + is_static * (static_samples + 1);
   for (int b = 0; b < max_bounces; b++)
   {
     glm::vec3 normal;
@@ -280,17 +283,21 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
     }
   }
 
-  return acc;
+  return acc;*/
 }
 
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
-	const unsigned int half_w, const unsigned int half_h,
-	const scene::SceneData *const scene, unsigned int hash_seed,
-	glm::vec3 offset, glm::vec3 dir_offset, int frame_nb, glm::vec3 *temporal_framebuffer, bool moved)
+	const scene::SceneData *const scene, scene::Camera cam, unsigned int hash_seed,
+  int frame_nb, glm::vec3 *temporal_framebuffer, bool moved)
 {
+  const unsigned int half_w = width / 2;
+  const unsigned int half_h = height / 2;
+
 	const int x = blockDim.x * blockIdx.x + threadIdx.x;
 	const int y = blockDim.y * blockIdx.y + threadIdx.y;
+
+  if (x >= width || y >= height) return;
 
 	const unsigned int tid = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
@@ -300,16 +307,15 @@ kernel(const unsigned int width, const unsigned int height,
 	curandState rand_state;
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
-	struct scene::Camera *cam = scene->cam;
-	float screen_dist = __tanf(cam->fov_x * 0.5);
+	//float screen_dist = __tanf(cam.fov_x * 0.5);
 
-	glm::vec3 look_at = glm::normalize(cam->dir - dir_offset);
+	//glm::vec3 look_at = glm::normalize(cam.dir - dir_offset);
 
-	glm::vec3 cx = glm::vec3(width * screen_dist / height, 0.0f, 0.0f);
-	glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * screen_dist;
+	//glm::vec3 cx = glm::vec3(width * screen_dist / height, 0.0f, 0.0f);
+	//glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * screen_dist;
 
 	glm::vec3 rad = glm::vec3(0.0f);
-	scene::Ray r = generateRay(x, y, half_w, half_h, scene->cam);
+	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
 	/*r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + look_at;
 	r.dir = glm::normalize(r.dir);
 	r.origin = r.dir * 40.f + cam->position + offset / 10.f;*/
@@ -317,26 +323,35 @@ kernel(const unsigned int width, const unsigned int height,
 	int is_static = !moved;
 	int static_samples = 1;
 	int samples = 2 + is_static * static_samples;
-	for (int i = 0; i < samples; i++)
+	/*for (int i = 0; i < samples; i++)
 		rad += radiance(r, scene, &rand_state, is_static, static_samples);
 
-	rad /= samples;
-  rad += radiance(r, scene, &rand_state, is_static, static_samples);
+	rad /= samples;*/
+  rad += radiance(r, scene, &cam, &rand_state, is_static, static_samples);
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
-	int i = (height - y - 1) * width + x;
+	/*int i = (height - y - 1) * width + x;
 	temporal_framebuffer[i] *= is_static;
 	temporal_framebuffer[i] += rad;
 
-	rad = temporal_framebuffer[i] / (float)frame_nb;
+	rad = temporal_framebuffer[i] / (float)frame_nb;*/
 
 	rad = exposure(rad);
 	rad = glm::pow(rad, glm::vec3(1.0f / 2.2f));
 
-	rgbx.r = rad.x * 255;
-	rgbx.g = rad.y * 255;
-	rgbx.b = rad.z * 255;
+  if (cam.position.z > 0)
+  {
+    rgbx.r = rad.x * 255;
+    rgbx.g = rad.y * 255;
+    rgbx.b = rad.z * 255;
+  }
+  else
+  {
+    rgbx.r = 255;
+    rgbx.g = 255;
+    rgbx.b = 0;
+  }
 
 	surf2Dwrite(rgbx.b32,
 		surf,
@@ -357,9 +372,9 @@ inline unsigned int WangHash(unsigned int a)
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
+raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const scene::Camera * const cam,
 	const unsigned int width, const unsigned int height, cudaStream_t stream,
-	glm::vec3 offset, glm::vec3 dir_offset, glm::vec3 *temporal_framebuffer, bool moved)
+	glm::vec3 *temporal_framebuffer, bool moved)
 {
 	static unsigned int seed = 0;
 
@@ -379,9 +394,11 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene,
 	dim3 threads_per_block(16, 16);
 	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
 
+  std::cout << cam->position.z << std::endl;
+
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
-		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height,
-			width / 2, height / 2, scene, WangHash(seed), offset, dir_offset, seed, temporal_framebuffer, moved);
+		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scene, *cam,
+      WangHash(seed), seed, temporal_framebuffer, moved);
 
 	return cudaSuccess;
 }

@@ -20,7 +20,6 @@ namespace scene
 
   struct SceneData
   {
-    struct Camera *cam;
     struct Buffer<struct Mesh> meshes;
     struct Buffer<tinyobj::real_t> vertices;
     struct Buffer<tinyobj::real_t> normals;
