@@ -269,7 +269,7 @@ namespace scene
 
     parse_scene(_filepath, *_scene_data, *_camera, objfilepath);
 
-    std::string::size_type pos = _filepath.find('/');
+    std::string::size_type pos = _filepath.find_last_of('/');
     if (pos != std::string::npos)
     {
       base_dir = _filepath.substr(0, pos) + "/";
@@ -278,7 +278,7 @@ namespace scene
     }
 
     // Extracts basedir to find MTL if any.
-    pos = objfilepath.find('/');
+    pos = objfilepath.find_last_of('/');
     if (pos != std::string::npos)
     {
       mtl_dir = base_dir + "/" + objfilepath.substr(0, pos);
@@ -337,6 +337,7 @@ namespace scene
     upload_attribute(attrib.normals, _scene_data->normals);
     upload_materials(materials, _scene_data->materials);
     upload_meshes(shapes, _scene_data->meshes);
+	std::cout << _scene_data->meshes.size << std::endl;
     // Now the sceneData struct contains pointers to memory adresses
     // mapped by the GPU, we can send the whole struct to the GPU.
     cudaMalloc(&_d_scene_data, sizeof(struct SceneData));
