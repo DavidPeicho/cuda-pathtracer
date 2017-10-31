@@ -115,7 +115,7 @@ intersect(const scene::Ray& r,
         normal[v].y = scene->normals.data[3 * idx.normal_index + 1];
         normal[v].z = scene->normals.data[3 * idx.normal_index + 2];
 			}
-			if (intersectTriangle(vertex, r, t) && t < inter_dist)
+			if (intersectTriangle(vertex, r, t) && t < inter_dist && t > 0.0)
 			{
         inter_dist = t;
         n = normal[0];

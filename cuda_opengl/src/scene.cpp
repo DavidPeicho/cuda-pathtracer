@@ -337,7 +337,7 @@ namespace scene
     upload_attribute(attrib.normals, _scene_data->normals);
     upload_materials(materials, _scene_data->materials);
     upload_meshes(shapes, _scene_data->meshes);
-	std::cout << _scene_data->meshes.size << std::endl;
+
     // Now the sceneData struct contains pointers to memory adresses
     // mapped by the GPU, we can send the whole struct to the GPU.
     cudaMalloc(&_d_scene_data, sizeof(struct SceneData));

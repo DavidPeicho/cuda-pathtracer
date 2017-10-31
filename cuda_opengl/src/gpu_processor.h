@@ -8,6 +8,8 @@
 
 #include "scene.h"
 
+# define M_PI 3.14159265358979323846
+
 namespace processor
 {
   class GPUProcessor
@@ -71,6 +73,6 @@ namespace processor
       bool _keys[65536];
       bool _moved;
 
-      glm::vec2 _angle = glm::vec2(0.0f);
+      glm::vec2 _angle = glm::vec2(0.0f, M_PI);
   };
 } // namespace processor

@@ -83,8 +83,6 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
   processor::GPUProcessor* const processor =
     (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
 
-  std::cout << xpos << std::endl;
-
 	processor->setMoved(true);
   processor->setMousePos(xpos, ypos);
 }
@@ -123,6 +121,7 @@ main(int argc, char* argv[])
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 	glfwSetKeyCallback(window, glfw_key_callback);
 	glfwSetCursorPosCallback(window, glfw_mouse_callback);
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
   try
   {

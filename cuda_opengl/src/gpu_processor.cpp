@@ -10,6 +10,11 @@
 
 namespace processor
 {
+  namespace
+  {
+    static const glm::vec3 WORLD_DOWN_VEC(0.0, -1.0, 0.0);
+  }
+
   GPUProcessor::GPUProcessor(scene::Scene& scene, int width, int height)
                : _scene(scene)
                , _width(width)
@@ -57,13 +62,25 @@ namespace processor
 
     // Updates cam rotation
     //cam->dir = glm::cross(cam->u, cam->v);
-    cam->u = cross(cam->v, cam->dir);
+    //cam->u = cross(glm::vec3(0.0, -1.0, 0.0), cam->dir);
+    cam->u = cross(WORLD_DOWN_VEC, cam->dir);
+    cam->v = cross(cam->dir, cam->u);
 
     // Updates cam position
     if (this->isKeyPressed(GLFW_KEY_W)) cam->position += cam->dir * delta;
     if (this->isKeyPressed(GLFW_KEY_S)) cam->position -= cam->dir * delta;
     if (this->isKeyPressed(GLFW_KEY_A)) cam->position -= cam->u * delta;
     if (this->isKeyPressed(GLFW_KEY_D)) cam->position += cam->u * delta;
+
+    // Resets camera orientation
+    if (this->isKeyPressed(GLFW_KEY_SPACE))
+    {
+      cam->dir.x = 0.0;
+      cam->dir.y = 0.0;
+      cam->dir.z = -1.0;
+      _angle.x = 0.0;
+      _angle.y = M_PI;
+    }
 
     _interop.blit();
     _interop.swap();
