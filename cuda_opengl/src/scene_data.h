@@ -41,6 +41,8 @@ namespace scene
   {
     tinyobj::real_t color[3];
     glm::vec3 vec;
+    float emission;
+    float radius;
   };
 
   struct Camera

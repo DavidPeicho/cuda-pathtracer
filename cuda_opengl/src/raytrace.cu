@@ -73,33 +73,34 @@ intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, float& t)
 	return true;
 }
 
-__device__ bool intersectSphere(const scene::Ray &r, float rad, glm::vec3 pos, float& t)
+__device__ bool
+intersectSphere(const scene::Ray &r, const scene::LightProp & const light, float& t)
 {
+  static const float epsilon = 0.01f;
 
-	glm::vec3 op = pos - r.origin;
-	float epsilon = 0.01f;
+	glm::vec3 op = light.vec - r.origin;
 	float b = dot(op, r.dir);
-	float disc = b*b - dot(op, op) + rad*rad;
-	if (disc < 0)
-		return 0;
-	else
-		//disc = sqrtf(disc);
-		disc = __fsqrt_rn(disc);
+	float disc = b*b - dot(op, op) + light.radius * light.radius;
+	if (disc < 0.0) return 0;
+
+  disc = __fsqrt_rn(disc);
 	(t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0);
 
-	return t != 0;
+	return t != 0.0;
 }
 
 __device__ inline bool
-intersect(const scene::Ray& r,
-	const struct scene::SceneData *const scene, glm::vec3& n, float& t, bool& light_emitter, glm::vec3& diff, glm::vec3& l)
+intersect(const scene::Ray& r, const struct scene::SceneData *const scene,
+  glm::vec3& normal, float& t, scene::Material& material_out, scene::LightProp &light_out, bool& is_light)
 {
-  float inter_dist = 1000000.0;
-  int inter_mat_idx = -1;
+  static const float MAX_DIST = 100000.0;
+  float inter_dist = MAX_DIST;
 
 	glm::vec3 light_pos = glm::vec3(0.0f, -0.1f, 0.0f);
 	glm::vec3 vertex[3];
-  glm::vec3 normal[3];
+  glm::vec3 v_normal[3];
+
+  // Checks meshes intersection
 	for (size_t m = 0; m < scene->meshes.size; ++m)
 	{
 		const scene::Mesh &mesh = scene->meshes.data[m];
@@ -111,37 +112,34 @@ intersect(const scene::Ray& r,
 				vertex[v].x = scene->vertices.data[3 * idx.vertex_index];
 				vertex[v].y = scene->vertices.data[3 * idx.vertex_index + 1];
 				vertex[v].z = scene->vertices.data[3 * idx.vertex_index + 2];
-        normal[v].x = scene->normals.data[3 * idx.normal_index];
-        normal[v].y = scene->normals.data[3 * idx.normal_index + 1];
-        normal[v].z = scene->normals.data[3 * idx.normal_index + 2];
+        v_normal[v].x = scene->normals.data[3 * idx.normal_index];
+        v_normal[v].y = scene->normals.data[3 * idx.normal_index + 1];
+        v_normal[v].z = scene->normals.data[3 * idx.normal_index + 2];
 			}
-			if (intersectTriangle(vertex, r, t) && t < inter_dist && t > 0.0)
+			if (intersectTriangle(vertex, r, inter_dist) && inter_dist < t && inter_dist > 0.0)
 			{
-        inter_dist = t;
-        n = normal[0];
-        inter_mat_idx = mesh.material_ids.data[i / 3];
-			}
-
-			if (intersectSphere(r, 0.5f, light_pos, t))
-			{
-				light_emitter = true;
-				l = light_pos;
-				return true;
+        t = inter_dist;
+        normal = v_normal[0]; // For now, use the first normal, next step is to interpolate.
+        material_out = scene->materials.data[mesh.material_ids.data[i / 3]];
+        is_light = false;
 			}
 		}
-
-    // At least one intersection has been found.
-    if (inter_mat_idx >= 0)
-    {
-      const scene::Material &const mat = scene->materials.data[inter_mat_idx];
-      diff.x = mat.diffuse[0];
-      diff.y = mat.diffuse[1];
-      diff.z = mat.diffuse[2];
-      return true;
-    }
-
 	}
-	return false;
+
+  // At least one intersection has been found.
+  for (size_t l = 0; l < scene->lights.size; ++l)
+  {
+    // Checks lights intersection
+    const scene::LightProp &const light = scene->lights.data[l];
+    if (intersectSphere(r, light, inter_dist) && inter_dist < t && inter_dist >= 0.0)
+    {
+      is_light = true;
+      light_out = light;
+      t = inter_dist;
+    }
+  }
+
+	return t < MAX_DIST;
 }
 
 #define M_PI 3.14159265359f
@@ -198,20 +196,15 @@ exposure(glm::vec3 color)
 }
 
 __device__ inline glm::vec3
-sample_lights(scene::Ray& r, glm::vec3 l, glm::vec3 color, glm::vec3 emission, float PDF, glm::vec3 normal)
+sample_lights(scene::Ray& r, const scene::Buffer<scene::LightProp>& lights,
+  glm::vec3 color, float PDF, glm::vec3 normal)
 {
-	// Hardcoded for now, should be cleaned
-	glm::vec3 light_pos = glm::vec3(0.0f, 0.2f, 0.0f);
 	glm::vec3 L = glm::vec3(0.0f);
-	int nb_lights = 1;
-	for (int i = 0; i < nb_lights; i++)
+	for (int i = 0; i < lights.size; i++)
 	{
-		// Hardcoded for now, should be cleaned
-		if (l == light_pos)
-			continue;
-
-		float n_dot_l = glm::dot(normal, l);
-		L += color * n_dot_l * emission / PDF;
+    const scene::LightProp& const l = lights.data[i];
+		float n_dot_l = glm::dot(normal, l.vec - r.origin);
+		L += color * n_dot_l * l.emission / PDF;
 	}
 
 	return L;
@@ -223,32 +216,31 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 {
   glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
-  const int max_bounces = 1;// +is_static * (static_samples + 1);
-  glm::vec3 col;
+  //const int max_bounces = 1 + is_static * (static_samples + 1);
+  const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
     glm::vec3 normal;
     glm::vec3 oriented_normal;
-    glm::vec3 color = glm::vec3(0.2f, 0.2f, 0.1f);
-    // Light energy emission
-    glm::vec3 emission = glm::vec3(1.0f);
     // For energy compensation on Russian roulette
     glm::vec3 thoughput = glm::vec3(1.0f);
-    glm::vec3 mat_reflectance = glm::vec3(1.0f);
-    glm::vec3 l;
     float t = 100000;
+
+    scene::Material material;
+    scene::LightProp light;
     bool light_emitter = false;
 
-    //float intersection = (float)intersect(r, scene, normal, t, light_emitter);
-    if (intersect(r, scene, normal, t, light_emitter, col, l))
+    if (intersect(r, scene, normal, t, material, light, light_emitter))
     {
       float cos_theta = glm::dot(normal, r.dir);
-      glm::vec3 light_dir = glm::normalize(l - r.origin);
-      float n_dot_l = glm::dot(normal, light_dir);
       oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
 
       //acc += mask * emission * (float)light_emitter * intersection;
-      acc += emission * (float)light_emitter * thoughput;
+      if (light_emitter)
+      {
+        acc += light.emission * thoughput;
+        continue;
+      }
 
       float r1 = curand_uniform(rand_state);
       float phi = 2.0f * M_PI * curand_uniform(rand_state);
@@ -273,13 +265,14 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
       //mask *= intersection * color + (1.0f - intersection) * 1.0f;
       //Lambert BRDF/PDF
-      glm::vec3 BRDF = col * n_dot_l; // Divided by PI
+      glm::vec3 diffuse = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
+      glm::vec3 BRDF = diffuse /** n_dot_l*/; // Divided by PI
       float PDF = cos_theta; // Divided by PI
                              //glm::vec3 BRDF = color;
       glm::vec3 direct_light = BRDF / PDF;
       thoughput *= direct_light;
 
-      acc += thoughput * sample_lights(r, l, col, emission, PDF, normal);
+      acc += thoughput * sample_lights(r, scene->lights, diffuse, PDF, normal);
 
       // Russian roulette
       float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
@@ -290,7 +283,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
     }
   }
 
-  return col;
+  return acc;
 }
 
 __global__ void
@@ -314,22 +307,13 @@ kernel(const unsigned int width, const unsigned int height,
 	curandState rand_state;
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
-	//float screen_dist = __tanf(cam.fov_x * 0.5);
-
-	//glm::vec3 look_at = glm::normalize(cam.dir - dir_offset);
-
-	//glm::vec3 cx = glm::vec3(width * screen_dist / height, 0.0f, 0.0f);
-	//glm::vec3 cy = glm::normalize(glm::cross(cx, look_at)) * screen_dist;
-
-	glm::vec3 rad = glm::vec3(0.0f);
 	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
-	/*r.dir = cx*((.25f + x) / width - .5f) + cy*((.25f + y) / height - .5f) + look_at;
-	r.dir = glm::normalize(r.dir);
-	r.origin = r.dir * 40.f + cam->position + offset / 10.f;*/
 
 	int is_static = !moved;
 	int static_samples = 1;
 	int samples = 2 + is_static * static_samples;
+
+  glm::vec3 rad = glm::vec3(0.0f);
 	for (int i = 0; i < samples; i++)
 		rad += radiance(r, scene, &cam, &rand_state, is_static, static_samples);
 

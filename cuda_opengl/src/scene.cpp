@@ -90,7 +90,7 @@ namespace scene
       std::string token;
       while (std::getline(file, line))
       {
-        if (line.empty()) continue;
+        if (line.empty() || line[0] == '#') continue;
 
         std::stringstream iss(line);
         iss >> token;
@@ -102,6 +102,12 @@ namespace scene
             throw std::runtime_error("parse_scene(): error parsing p_light vector.");
           if (!parse_double3(plight.color, iss))
             throw std::runtime_error("parse_scene(): error parsing p_light color.");
+          if (iss.peek() == std::char_traits<char>::eof())
+            throw std::runtime_error("parse_scene(): error parsing p_light emission.");
+          iss >> plight.emission;
+          if (iss.peek() == std::char_traits<char>::eof())
+            throw std::runtime_error("parse_scene(): error parsing p_light radius.");
+          iss >> plight.radius;
           light_vec.push_back(plight);
         }
         else if (token == "scene")

@@ -61,8 +61,6 @@ namespace processor
     this->setMoved(false);
 
     // Updates cam rotation
-    //cam->dir = glm::cross(cam->u, cam->v);
-    //cam->u = cross(glm::vec3(0.0, -1.0, 0.0), cam->dir);
     cam->u = cross(WORLD_DOWN_VEC, cam->dir);
     cam->v = cross(cam->dir, cam->u);
 
