@@ -32,16 +32,20 @@ namespace processor
       inline void
       setMousePos(const double x, const double y)
       {
-        angle.x -= 0.003f * float(_width / 2 - x);
-        angle.y -= 0.003f * float(_height / 2 - y);
+        double x_step = (x - _width * 0.5);
+        double y_step = (y - _height * 0.5);
 
-        dir_offset = glm::vec3(
-          cos(angle.y) * sin(angle.x),
-          sin(angle.y),
-          cos(angle.y) * cos(angle.x)
+        _angle.x -= x_step * 0.001;
+        _angle.y += y_step * 0.001;
+
+        glm::vec3 offset = glm::vec3(
+          cos(_angle.y) * sin(_angle.x),
+          sin(_angle.y),
+          cos(_angle.y) * cos(_angle.x)
         );
 
-        dir_offset = glm::normalize(dir_offset);
+        _scene.getCamPointer()->dir += offset;
+        _scene.getCamPointer()->dir = glm::normalize(_scene.getCamPointer()->dir);
       }
 
       bool
@@ -67,9 +71,6 @@ namespace processor
       bool _keys[65536];
       bool _moved;
 
-      // TODO: Refactors this, which is hardcoded for now
-      glm::vec3 offset = glm::vec3(0.0f);
-      glm::vec2 angle = glm::vec2(0.0f);
-      glm::vec3 dir_offset = glm::vec3(0.0f);
+      glm::vec2 _angle = glm::vec2(0.0f);
   };
 } // namespace processor

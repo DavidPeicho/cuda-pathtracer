@@ -16,11 +16,9 @@ namespace processor
                , _height(height)
                , _interop(width, height)
   {
-    cudaSetDevice(_gpu_info.getCUDAGPU().device_id);
+    //cudaSetDevice(_gpu_info.getCUDAGPU().device_id);
     // Logs information about the GPUs.
     std::cout << _gpu_info.getProfile() << std::endl;
-
-    _scene.upload(false);
 
     // Logs information about the GPUs, allows to see
     // how much memory is consummed by the obj scene.
@@ -57,12 +55,15 @@ namespace processor
 
     this->setMoved(false);
 
-    //cam->position.z -= 0.05;
+    // Updates cam rotation
+    //cam->dir = glm::cross(cam->u, cam->v);
+    cam->u = cross(cam->v, cam->dir);
 
-    if (this->isKeyPressed(GLFW_KEY_W)) cam->position.z -= delta;
-    if (this->isKeyPressed(GLFW_KEY_Z)) cam->position.z += delta;
-    if (this->isKeyPressed(GLFW_KEY_A)) cam->position.x -= delta;
-    if (this->isKeyPressed(GLFW_KEY_D)) cam->position.x += delta;
+    // Updates cam position
+    if (this->isKeyPressed(GLFW_KEY_W)) cam->position += cam->dir * delta;
+    if (this->isKeyPressed(GLFW_KEY_S)) cam->position -= cam->dir * delta;
+    if (this->isKeyPressed(GLFW_KEY_A)) cam->position -= cam->u * delta;
+    if (this->isKeyPressed(GLFW_KEY_D)) cam->position += cam->u * delta;
 
     _interop.blit();
     _interop.swap();

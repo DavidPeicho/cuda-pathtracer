@@ -51,11 +51,10 @@ generateRay(const int x, const int y,
 }
 
 __device__ inline bool
-intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, glm::vec3& n, float& t)
+intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, float& t)
 {
 	glm::vec3 v0v1 = vert[1] - vert[0];
 	glm::vec3 v0v2 = vert[2] - vert[0];
-	n = glm::normalize(glm::cross(v0v1, v0v2));
 	glm::vec3 p_vec = glm::cross(ray.dir, v0v2);
 	float det = glm::dot(v0v1, p_vec);
 	if (det < 0.0000001)
@@ -95,8 +94,12 @@ __device__ inline bool
 intersect(const scene::Ray& r,
 	const struct scene::SceneData *const scene, glm::vec3& n, float& t, bool& light_emitter, glm::vec3& diff, glm::vec3& l)
 {
+  float inter_dist = 1000000.0;
+  int inter_mat_idx = -1;
+
 	glm::vec3 light_pos = glm::vec3(0.0f, -0.1f, 0.0f);
 	glm::vec3 vertex[3];
+  glm::vec3 normal[3];
 	for (size_t m = 0; m < scene->meshes.size; ++m)
 	{
 		const scene::Mesh &mesh = scene->meshes.data[m];
@@ -108,15 +111,15 @@ intersect(const scene::Ray& r,
 				vertex[v].x = scene->vertices.data[3 * idx.vertex_index];
 				vertex[v].y = scene->vertices.data[3 * idx.vertex_index + 1];
 				vertex[v].z = scene->vertices.data[3 * idx.vertex_index + 2];
+        normal[v].x = scene->normals.data[3 * idx.normal_index];
+        normal[v].y = scene->normals.data[3 * idx.normal_index + 1];
+        normal[v].z = scene->normals.data[3 * idx.normal_index + 2];
 			}
-			if (intersectTriangle(vertex, r, n, t))
+			if (intersectTriangle(vertex, r, t) && t < inter_dist)
 			{
-        int mat_idx = mesh.material_ids.data[i / 3];
-        const scene::Material &const mat = scene->materials.data[mat_idx];
-        diff.x = mat.diffuse[0];
-        diff.y = mat.diffuse[1];
-        diff.z = mat.diffuse[2];
-				return true;
+        inter_dist = t;
+        n = normal[0];
+        inter_mat_idx = mesh.material_ids.data[i / 3];
 			}
 
 			if (intersectSphere(r, 0.5f, light_pos, t))
@@ -126,6 +129,17 @@ intersect(const scene::Ray& r,
 				return true;
 			}
 		}
+
+    // At least one intersection has been found.
+    if (inter_mat_idx >= 0)
+    {
+      const scene::Material &const mat = scene->materials.data[inter_mat_idx];
+      diff.x = mat.diffuse[0];
+      diff.y = mat.diffuse[1];
+      diff.z = mat.diffuse[2];
+      return true;
+    }
+
 	}
 	return false;
 }
@@ -376,8 +390,6 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const sce
 	// shared memory size, warp size, etc...
 	dim3 threads_per_block(16, 16);
 	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
-
-  std::cout << cam->position.z << std::endl;
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scene, *cam,

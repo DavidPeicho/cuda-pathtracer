@@ -83,6 +83,8 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
   processor::GPUProcessor* const processor =
     (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
 
+  std::cout << xpos << std::endl;
+
 	processor->setMoved(true);
   processor->setMousePos(xpos, ypos);
 }
@@ -94,7 +96,7 @@ main(int argc, char* argv[])
   {
     std::cerr << "artracer: missing scene argument.\n";
     std::cerr << "usage: artracer [OBJ SCENE]" << std::endl;
-    return 1;
+    //return 1;
   }
 
   const int window_w = 1024;
@@ -105,17 +107,10 @@ main(int argc, char* argv[])
 
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene(argv[1]);
-  scene::Scene scene(argv[1]);
+  scene::Scene scene("assets/cornell.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
   processor::GPUProcessor processor(scene, window_w, window_h);
-
-  if (!processor.init())
-  {
-    std::cerr << "artracer: obj parsing failed.\n";
-    std::cerr << "output: " << scene.error() << std::endl;
-    return 1;
-  }
 
 	int width = 0;
 	int height = 0;
@@ -128,6 +123,21 @@ main(int argc, char* argv[])
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 	glfwSetKeyCallback(window, glfw_key_callback);
 	glfwSetCursorPosCallback(window, glfw_mouse_callback);
+
+  try
+  {
+    if (!processor.init())
+    {
+      std::cerr << "artracer: obj parsing failed.\n";
+      std::cerr << "output: " << scene.error() << std::endl;
+      return 1;
+    }
+  } catch (std::exception e)
+  {
+    std::cerr << "artracer: exception: " << std::endl;
+    std::cerr << e.what() << std::endl;
+    return 1;
+  }
 
   double last_time = 0.0;
   double curr_time = 0.0;
