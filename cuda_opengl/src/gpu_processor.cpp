@@ -57,7 +57,7 @@ namespace processor
 
     this->setMoved(false);
 
-    cam->position.z -= 0.05;
+    //cam->position.z -= 0.05;
 
     if (this->isKeyPressed(GLFW_KEY_W)) cam->position.z -= delta;
     if (this->isKeyPressed(GLFW_KEY_Z)) cam->position.z += delta;
