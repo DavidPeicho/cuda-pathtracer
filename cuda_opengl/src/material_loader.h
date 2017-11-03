@@ -20,12 +20,18 @@ namespace scene
       load(std::vector<Texture>&, std::vector<Material>&);
 
     private:
-      unsigned int
+      int
+      getTextureId(std::string tex_rgb);
+
+      int
       getTextureId(std::string tex_rgb, glm::vec3 default_rgb);
 
-      unsigned int
+      int
       getTextureId(std::string tex_rgb, std::string tex_a,
         glm::vec3 default_rgb, float default_a);
+
+      int
+      registerOrGet(std::string tex_rgb);
 
     private:
       const std::string _mtl_folder;
@@ -41,7 +47,7 @@ namespace scene
       /// <summary>
       /// Contains all the textures that have been packed together
       /// </summary>
-      std::unordered_map<std::string, unsigned int> _packed_tex;
+      std::unordered_map<std::string, int> _packed_tex;
 
       /// <summary>
       /// Contains the materials to send to the GPU.

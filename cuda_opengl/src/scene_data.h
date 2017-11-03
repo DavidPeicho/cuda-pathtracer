@@ -32,6 +32,7 @@ namespace scene
     struct Buffer<tinyobj::real_t> vertices;
     struct Buffer<tinyobj::real_t> normals;
     struct Buffer<tinyobj::real_t> texcoords;
+    struct Buffer<tinyobj::real_t> tangent;
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
     struct Buffer<struct Texture> textures;
@@ -39,7 +40,8 @@ namespace scene
 
   struct Material
   {
-    unsigned int diffuse_spec_map;
+    int diffuse_spec_map;
+    int normal_map;
   };
 
   struct LightProp

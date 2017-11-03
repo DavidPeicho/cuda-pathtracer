@@ -38,8 +38,11 @@ struct IntersectionData
   float dist;
   float specular_col;
   glm::vec3 normal;
+  glm::vec3 surface_normal;
+  glm::vec3 tangent;
+  glm::mat3 tbn;
   glm::vec3 diffuse_col;
-  glm::vec3 normal_col;
+  glm::vec2 uv;
   const scene::LightProp *light;
   bool is_light;
 };
@@ -150,6 +153,8 @@ intersect(const scene::Ray& r,
   glm::vec3 normal;
   glm::vec2 uv;
 
+  const scene::Material *inter_mat = nullptr;
+
   // Checks meshes intersection
 	for (size_t m = 0; m < scene->meshes.size; ++m)
 	{
@@ -171,19 +176,18 @@ intersect(const scene::Ray& r,
 			if (intersectTriangle(vertex, v_normal, v_uv, normal, uv, r, inter_dist)
           && inter_dist < intersection.dist && inter_dist > 0.0)
 			{
-        const scene::Material& mat = scene->materials.data[mesh.material_ids.data[i / 3]];
-        intersection.dist = inter_dist;
+        tinyobj::index_t idx = mesh.indices.data[i];
+
+        inter_mat = &scene->materials.data[mesh.material_ids.data[i / 3]];
         intersection.normal = normal;
+        intersection.surface_normal = normal;
 
-        sampleTexture(scene->textures, mat.diffuse_spec_map, uv, intersection.diffuse_col);
-        /*if (mat.diffuse_map >= 0)
-          sampleTexture(scene->textures, mat.diffuse_map, uv, intersection.diffuse_col);
-        else
-          intersection.diffuse_col = glm::vec3(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]);
+        intersection.tangent.x = scene->tangent.data[3 * idx.tangent];
+        intersection.tangent.y = scene->tangent.data[3 * idx.tangent + 1];
+        intersection.tangent.z = scene->tangent.data[3 * idx.tangent + 2];
 
-        if (mat.spec_map >= 0)
-          sampleTexture(scene->textures, mat.spec_map, uv, intersection.specular_col);*/
-
+        intersection.uv = uv;
+        intersection.dist = inter_dist;
         intersection.is_light = false;
         intersection.light = NULL;
 			}
@@ -203,6 +207,28 @@ intersect(const scene::Ray& r,
       intersection.dist = inter_dist;
       intersection.diffuse_col = glm::vec3(light.color[0], light.color[1], light.color[2]);
       intersection.normal = glm::normalize(light.vec - (inter_dist * r.dir));
+      intersection.surface_normal = glm::normalize(light.vec - (inter_dist * r.dir));
+      inter_mat = nullptr;
+    }
+  }
+
+  // Samples texture & computes normal mapping only once,
+  // when we are sure this is the closest intersection.
+  if (inter_mat)
+  {
+    // Fetches diffuse color from texture
+    sampleTexture(scene->textures, inter_mat->diffuse_spec_map, intersection.uv, intersection.diffuse_col);
+    glm::vec3 binormal = glm::cross(intersection.normal, intersection.tangent);
+    intersection.tbn[0] = intersection.tangent;
+    intersection.tbn[1] = binormal;
+    intersection.tbn[2] = intersection.normal;
+    intersection.tbn = glm::transpose(intersection.tbn);
+
+    // Computes normal perturbated by normal map
+    if (inter_mat->normal_map >= 0)
+    {
+      sampleTexture(scene->textures, inter_mat->normal_map, intersection.uv, intersection.normal);
+      intersection.normal = glm::normalize(intersection.normal * 2.0f - 1.0f);
     }
   }
 
@@ -264,14 +290,16 @@ exposure(glm::vec3 color)
 
 __device__ inline glm::vec3
 sample_lights(scene::Ray& r, const scene::Buffer<scene::LightProp>& lights,
-  glm::vec3 color, float PDF, glm::vec3 normal)
+  float PDF, const IntersectionData& inter)
 {
 	glm::vec3 L = glm::vec3(0.0f);
 	for (int i = 0; i < lights.size; i++)
 	{
     const scene::LightProp& const l = lights.data[i];
-		float n_dot_l = glm::dot(normal, l.vec - r.origin);
-		L += color * n_dot_l * l.emission / PDF;
+    glm::vec3 tangent_light_dir = inter.tbn * (l.vec - r.origin);
+
+		float n_dot_l = glm::dot(inter.normal, tangent_light_dir);
+		L += inter.diffuse_col * n_dot_l * l.emission / PDF;
 	}
 
 	return L;
@@ -298,7 +326,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
     if (intersect(r, scene, inter))
     {
       float cos_theta = glm::dot(inter.normal, r.dir);
-      oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+      oriented_normal = cos_theta < 0 ? inter.surface_normal : inter.surface_normal * -1.0f;
 
       //acc += mask * emission * (float)light_emitter * intersection;
       if (inter.is_light)
@@ -338,7 +366,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
       thoughput *= direct_light;
 
       return BRDF;
-      acc += thoughput * sample_lights(r, scene->lights, inter.diffuse_col, PDF, inter.normal);
+      acc += thoughput * sample_lights(r, scene->lights, PDF, inter);
 
       // Russian roulette
       float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));

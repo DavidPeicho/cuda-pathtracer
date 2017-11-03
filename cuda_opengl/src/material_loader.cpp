@@ -109,15 +109,24 @@ namespace scene
       mat.diffuse_spec_map = getTextureId(tiny_mat.diffuse_texname,
         tiny_mat.specular_texname, default_diff_rgb, default_spec);
 
+      mat.normal_map = getTextureId(tiny_mat.bump_texname);
+
       _materials_gpu.push_back(mat);
     }
 
     out_tex = _textures;
     out_mat = _materials_gpu;
-
   }
 
-  unsigned int
+  int
+  MaterialLoader::getTextureId(std::string tex_rgb)
+  {
+    if (tex_rgb.empty()) return -1;
+
+    return registerOrGet(tex_rgb);
+  }
+
+  int
   MaterialLoader::getTextureId(std::string tex_rgb, glm::vec3 default_rgb)
   {
     if (tex_rgb.empty())
@@ -133,21 +142,10 @@ namespace scene
       unsigned int curr_id = ID++;
       return curr_id;
     }
-
-    if (_packed_tex.count(tex_rgb)) return _packed_tex[tex_rgb];
-
-    checkAndupload(tex_rgb, _mtl_folder, _loaded_tex);
-
-    const Texture& tex = _loaded_tex[tex_rgb];
-    _packed_tex[tex_rgb] = ID;
-
-    _textures.push_back(tex);
-
-    unsigned int curr_id = ID++;
-    return curr_id;
+    return registerOrGet(tex_rgb);
   }
 
-  unsigned int
+  int
   MaterialLoader::getTextureId(std::string tex_rgb, std::string tex_a,
       glm::vec3 default_rgb, float default_a)
   {
@@ -261,5 +259,21 @@ namespace scene
     _packed_tex[token] = ID++;
 
     return _packed_tex[token];
+  }
+
+  int
+  MaterialLoader::registerOrGet(std::string tex_rgb)
+  {
+    if (_packed_tex.count(tex_rgb)) return _packed_tex[tex_rgb];
+
+    checkAndupload(tex_rgb, _mtl_folder, _loaded_tex);
+
+    const Texture& tex = _loaded_tex[tex_rgb];
+    _packed_tex[tex_rgb] = ID;
+
+    _textures.push_back(tex);
+
+    unsigned int curr_id = ID++;
+    return curr_id;
   }
 }

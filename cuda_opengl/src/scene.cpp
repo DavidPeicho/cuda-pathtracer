@@ -350,6 +350,7 @@ namespace scene
     upload_attribute(attrib.vertices, _scene_data->vertices);
     upload_attribute(attrib.normals, _scene_data->normals);
     upload_attribute(attrib.texcoords, _scene_data->texcoords);
+    upload_attribute(attrib.tangents, _scene_data->tangent);
     upload_materials(materials, _scene_data, base_folder);
     upload_meshes(shapes, _scene_data->meshes);
 
@@ -402,7 +403,9 @@ namespace scene
     cudaFree(_scene_data->normals.data);
     // Frees texcoords
     cudaFree(_scene_data->texcoords.data);
-    // Frees texcoords
+    // Frees tangents
+    cudaFree(_scene_data->tangent.data);
+    // Frees materials
     cudaFree(_scene_data->materials.data);
     // Frees lights
     cudaFree(_scene_data->lights.data);

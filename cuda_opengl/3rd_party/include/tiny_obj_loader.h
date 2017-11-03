@@ -44,6 +44,8 @@ THE SOFTWARE.
 #ifndef TINY_OBJ_LOADER_H_
 #define TINY_OBJ_LOADER_H_
 
+#include <glm/common.hpp>
+
 #include <map>
 #include <string>
 #include <vector>
@@ -209,6 +211,7 @@ typedef struct {
   int vertex_index;
   int normal_index;
   int texcoord_index;
+  int tangent;
 } index_t;
 
 typedef struct {
@@ -230,6 +233,7 @@ typedef struct {
   std::vector<real_t> vertices;   // 'v'
   std::vector<real_t> normals;    // 'vn'
   std::vector<real_t> texcoords;  // 'vt'
+  std::vector<real_t> tangents;
 } attrib_t;
 
 typedef struct callback_t_ {
@@ -1457,6 +1461,7 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
   attrib->vertices.clear();
   attrib->normals.clear();
   attrib->texcoords.clear();
+  attrib->tangents.clear();
   shapes->clear();
 
   std::stringstream errss;
@@ -1776,6 +1781,56 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
   attrib->vertices.swap(v);
   attrib->normals.swap(vn);
   attrib->texcoords.swap(vt);
+
+  /*
+    This code is a hack to compute tangents. A good
+    thing would be to fork tinyobjloader and to add tangent
+    calculation *without* using glm. This is a TODO!
+  */
+  for (size_t i = 0; i < shapes->size(); ++i)
+  {
+    size_t index_offset = 0;
+    mesh_t &mesh = (*shapes)[i].mesh;
+    for (size_t f_idx = 0; f_idx < mesh.num_face_vertices.size(); f_idx++)
+    {
+      glm::vec3 vertices[3];
+      glm::vec3 normals[3];
+      glm::vec2 uvs[3];
+
+      for (size_t v = 0; v < 3; ++v)
+      {
+        tinyobj::index_t idx = mesh.indices[index_offset + v];
+        vertices[v].x = attrib->vertices[3 * idx.vertex_index];
+        vertices[v].y = attrib->vertices[3 * idx.vertex_index + 1];
+        vertices[v].z = attrib->vertices[3 * idx.vertex_index + 2];
+        normals[v].x = attrib->normals[3 * idx.normal_index];
+        normals[v].y = attrib->normals[3 * idx.normal_index + 1];
+        normals[v].z = attrib->normals[3 * idx.normal_index + 2];
+        uvs[v].x = attrib->texcoords[2 * idx.texcoord_index];
+        uvs[v].y = attrib->texcoords[2 * idx.texcoord_index + 1];
+      }
+
+      glm::vec3 edge1 = vertices[1] - vertices[0];
+      glm::vec3 edge2 = vertices[2] - vertices[0];
+      glm::vec2 delta_uv1 = uvs[1] - uvs[0];
+      glm::vec2 delta_uv2 = uvs[2] - uvs[0];
+
+      float f = 1.0f / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
+      glm::vec3 tangent;
+      tangent.x = f * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x);
+      tangent.y = f * (delta_uv2.y * edge1.y - delta_uv1.y * edge2.y);
+      tangent.z = f * (delta_uv2.y * edge1.z - delta_uv1.y * edge2.z);
+      tangent = glm::normalize(tangent);
+
+      mesh.indices[index_offset + 0].tangent = attrib->texcoords.size();
+      mesh.indices[index_offset + 1].tangent = attrib->texcoords.size();
+      mesh.indices[index_offset + 2].tangent = attrib->texcoords.size();
+
+      attrib->tangents.push_back(tangent.x);
+      attrib->tangents.push_back(tangent.y);
+      attrib->tangents.push_back(tangent.z);
+    }
+  }
 
   return true;
 }
