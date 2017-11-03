@@ -45,6 +45,7 @@ namespace scene
     tinyobj::real_t emission[3];
     tinyobj::real_t shininess;
     int diffuse_map;
+    int spec_map;
   };
 
   struct LightProp

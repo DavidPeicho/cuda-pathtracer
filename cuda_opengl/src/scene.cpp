@@ -204,6 +204,7 @@ namespace scene
         memcpy(&mat.emission, &tiny_mat.emission, 3 * sizeof(Real));
         memcpy(&mat.shininess, &tiny_mat.shininess, sizeof(Real));
         mat.diffuse_map = registerOrGetTexture(tiny_mat.diffuse_texname);
+        mat.spec_map = registerOrGetTexture(tiny_mat.specular_texname);
       }
 
       out_materials.size = nb_mat;
@@ -221,6 +222,7 @@ namespace scene
       // to load them.
       std::vector<scene::Texture> textures(tex_map.size());
 
+      // TODO: Pack some textures together, such as spec map + normal_map, etc...
       std::for_each(std::begin(tex_map), std::end(tex_map),
       [&base_folder, &textures](const std::pair<std::string, int>& pair)
       {
@@ -234,7 +236,6 @@ namespace scene
 
         texture.w = w;
         texture.h = h;
-        //textures[pair.second].data = (float*)img;
         cudaMalloc(&texture.data, nb_chan * w * h * sizeof(float));
         cudaThrowError();
         cudaMemcpy(texture.data, img, nb_chan * w * h * sizeof(float),

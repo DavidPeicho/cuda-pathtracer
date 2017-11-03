@@ -36,12 +36,50 @@ union rgba_24
 struct IntersectionData
 {
   float dist;
+  float specular_col;
   glm::vec3 normal;
   glm::vec3 diffuse_col;
   glm::vec3 normal_col;
   const scene::LightProp *light;
   bool is_light;
 };
+
+/*
+  The sampleTexture() method uses overloading to sample
+  several type of texture easily. It allows us to sample
+  3-channels texture as well as 1-channel textures.
+*/
+
+__device__ inline int
+getTextureIdx(const scene::Texture &texture, const glm::vec2& uv,
+  unsigned int nb_channels)
+{
+  int x = uv.x * (texture.w - 1);
+  int y = uv.y * (texture.h - 1);
+  return (y * texture.w + x) * nb_channels;
+}
+
+__device__ void
+sampleTexture(const scene::Buffer<scene::Texture>& textures,
+  int tex_id, const glm::vec2& uv, glm::vec3& out)
+{
+  const scene::Texture &tex = textures.data[tex_id];
+  int idx = getTextureIdx(tex, uv, 3);
+
+  out.x = tex.data[idx];
+  out.y = tex.data[idx + 1];
+  out.z = tex.data[idx + 2];
+}
+
+__device__ void
+sampleTexture(const scene::Buffer<scene::Texture>& textures,
+  int tex_id, const glm::vec2& uv, float& out)
+{
+  const scene::Texture &tex = textures.data[tex_id];
+  int idx = getTextureIdx(tex, uv, 1);
+
+  out = tex.data[idx];
+}
 
 HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
@@ -86,6 +124,7 @@ intersectTriangle(const glm::vec3 *vert, const glm::vec3 *v_norm,
   out_normal = v_norm[0];
   // Interpolates uvs
   out_uv = (1.0f - u - v) * v_uv[0] + u * v_uv[1] + v * v_uv[2];
+  out_uv = glm::mod(out_uv, 1.0f); // UVs should be in [0.0, 1.0]
 
 	t = glm::dot(v0v2, qvec) * inv_det;
 	return true;
@@ -146,16 +185,15 @@ intersect(const scene::Ray& r,
         const scene::Material& mat = scene->materials.data[mesh.material_ids.data[i / 3]];
         intersection.dist = inter_dist;
         intersection.normal = normal;
+
         if (mat.diffuse_map >= 0)
-        {
-          const scene::Texture &tex = scene->textures.data[mat.diffuse_map];
-          int x = uv.x * (tex.w - 1);
-          int y = uv.y * (tex.h - 1);
-          int idx = (y * tex.w + x) * 3;
-          intersection.diffuse_col = glm::vec3(tex.data[idx], tex.data[idx + 1], tex.data[idx + 2]);
-        }
+          sampleTexture(scene->textures, mat.diffuse_map, uv, intersection.diffuse_col);
         else
           intersection.diffuse_col = glm::vec3(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]);
+
+        if (mat.spec_map >= 0)
+          sampleTexture(scene->textures, mat.spec_map, uv, intersection.specular_col);
+
         intersection.is_light = false;
         intersection.light = NULL;
 			}
@@ -309,8 +347,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
       glm::vec3 direct_light = BRDF / PDF;
       thoughput *= direct_light;
 
-      acc = BRDF;
-      //acc += thoughput * sample_lights(r, scene->lights, inter.diffuse_col, PDF, inter.normal);
+      return BRDF;
+      acc += thoughput * sample_lights(r, scene->lights, inter.diffuse_col, PDF, inter.normal);
 
       // Russian roulette
       float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
@@ -354,8 +392,7 @@ kernel(const unsigned int width, const unsigned int height,
   glm::vec3 rad = glm::vec3(0.0f);
 	for (int i = 0; i < samples; i++)
 		rad += radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-
-	rad /= samples;
+  rad /= samples;
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
