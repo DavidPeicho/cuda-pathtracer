@@ -58,7 +58,8 @@ namespace scene
       void
       upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
         const std::vector<tinyobj::material_t>& materials,
-        const tinyobj::attrib_t attrib);
+        const tinyobj::attrib_t attrib,
+        const std::string& base_folder);
 
       void
       release_gpu();

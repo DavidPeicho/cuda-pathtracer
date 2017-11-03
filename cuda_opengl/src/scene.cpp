@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <ctype.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -9,8 +11,13 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include <sstream>
 #include <string>
+
+#include <unordered_map>
 
 #include "driver/cuda_helper.h"
 
@@ -156,8 +163,30 @@ namespace scene
     /// <param name="materials">Materials obtained from TinyObjLoader.</param>
     /// <param name="d_materials">Materials storage for the GPU.</param>
     void upload_materials(const MaterialVector &materials,
-                          Buffer<Material> &out_materials)
+                          scene::SceneData *scene,
+                          const std::string& base_folder)
     {
+      Buffer<scene::Material> &out_materials = scene->materials;
+      // The 'tex_id' and 'tex_map' variables allows to associate
+      // to each texture a unique ID. If several materials share a texture, they
+      // will share the same ID.
+      // Texture will be loaded at the end, by looping through the map.
+      static int tex_id = 0;
+      std::unordered_map<std::string, int> tex_map;
+
+      // The function below handles the texture map. If the texture already
+      // exists, it simply use the predefined id. If it does not exist yet,
+      // it creates a new id.
+      auto registerOrGetTexture = [&tex_map](const std::string& tex_name)
+      {
+        if (tex_name.empty()) return -1;
+
+        if (!tex_map.count(tex_name))
+          tex_map[tex_name] = tex_id++;
+
+        return tex_map[tex_name];
+      };
+
       size_t nb_mat = materials.size();
       size_t nb_bytes = nb_mat * sizeof(Material);
       Material *tmp_materials = new Material[nb_mat];
@@ -166,13 +195,15 @@ namespace scene
       // data inside the struct directly on the GPU memory.
       for (size_t i = 0; i < nb_mat; ++i)
       {
+        const auto &tiny_mat = materials[i];
         Material &mat = tmp_materials[i];
-        memcpy(&mat.ambient, &materials[i].ambient, 3 * sizeof (Real));
-        memcpy(&mat.diffuse, &materials[i].diffuse, 3 * sizeof(Real));
-        memcpy(&mat.specular, &materials[i].specular, 3 * sizeof(Real));
-        memcpy(&mat.transmittance, &materials[i].transmittance, 3 * sizeof(Real));
-        memcpy(&mat.emission, &materials[i].emission, 3 * sizeof(Real));
-        memcpy(&mat.shininess, &materials[i].shininess, sizeof(Real));
+        memcpy(&mat.ambient, &tiny_mat.ambient, 3 * sizeof (Real));
+        memcpy(&mat.diffuse, &tiny_mat.diffuse, 3 * sizeof(Real));
+        memcpy(&mat.specular, &tiny_mat.specular, 3 * sizeof(Real));
+        memcpy(&mat.transmittance, &tiny_mat.transmittance, 3 * sizeof(Real));
+        memcpy(&mat.emission, &tiny_mat.emission, 3 * sizeof(Real));
+        memcpy(&mat.shininess, &tiny_mat.shininess, sizeof(Real));
+        mat.diffuse_map = registerOrGetTexture(tiny_mat.diffuse_texname);
       }
 
       out_materials.size = nb_mat;
@@ -182,7 +213,49 @@ namespace scene
         cudaMemcpyHostToDevice);
       cudaThrowError();
 
+      // Deletes temporary materials after they have been sent
+      // to the GPU.
       delete tmp_materials;
+
+      // We know all the textures we have to load, it is time
+      // to load them.
+      std::vector<scene::Texture> textures(tex_map.size());
+
+      std::for_each(std::begin(tex_map), std::end(tex_map),
+      [&base_folder, &textures](const std::pair<std::string, int>& pair)
+      {
+        std::string full_path = base_folder + "/" + pair.first;
+        int w = 0;
+        int h = 0;
+        int nb_chan = 0;
+        float *img = stbi_loadf(full_path.c_str(), &w, &h, &nb_chan, STBI_default);
+
+        scene::Texture &texture = textures[pair.second];
+
+        texture.w = w;
+        texture.h = h;
+        //textures[pair.second].data = (float*)img;
+        cudaMalloc(&texture.data, nb_chan * w * h * sizeof(float));
+        cudaThrowError();
+        cudaMemcpy(texture.data, img, nb_chan * w * h * sizeof(float),
+          cudaMemcpyHostToDevice);
+        // When the texture is upload, it can be freed from
+        // the RAM.
+        stbi_image_free(img);
+      });
+
+      // Sends texture to the GPU.
+      if (textures.size())
+      {
+        scene->textures.size = textures.size();
+        size_t nb_tex_bytes = sizeof(scene::Texture) * textures.size();
+        cudaMalloc(&scene->textures.data, nb_tex_bytes);
+        cudaThrowError();
+        cudaMemcpy(scene->textures.data, &textures[0], nb_tex_bytes,
+          cudaMemcpyHostToDevice);
+      }
+
+      tex_id = 0;
     }
 
     void upload_meshes(const ShapeVector &shapes, Buffer<Mesh> &out_meshes)
@@ -287,7 +360,7 @@ namespace scene
     pos = objfilepath.find_last_of('/');
     if (pos != std::string::npos)
     {
-      mtl_dir = base_dir + "/" + objfilepath.substr(0, pos);
+      mtl_dir = base_dir + "/" + objfilepath.substr(0, pos) + "/";
     }
 
     _ready = tinyobj::LoadObj(&attrib, &shapes,
@@ -300,7 +373,7 @@ namespace scene
       return;
     }
 
-    upload_gpu(shapes, materials, attrib);
+    upload_gpu(shapes, materials, attrib, mtl_dir);
     _uploaded = true;
   }
 
@@ -317,23 +390,9 @@ namespace scene
   void
   Scene::upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
     const std::vector<tinyobj::material_t>& materials,
-    const tinyobj::attrib_t attrib)
+    const tinyobj::attrib_t attrib,
+    const std::string& base_folder)
   {
-
-    // DEBUG
-    /*_camera->position = glm::vec3(20.f, 10.f, 20.0f) - glm::vec3(193.f, 86.f, 215.f) / 10.f;
-    _camera->fov_x = (100.0 * M_PI) / 180.0;
-    _camera->u[0] = 1.0;
-    _camera->u[1] = 0.0;
-    _camera->u[2] = 0.0;
-    _camera->v[0] = 0.0;
-    _camera->v[1] = 1.0;
-    _camera->v[2] = 0.0;
-    _camera->u = glm::normalize(_camera->u);
-    _camera->v = glm::normalize(_camera->v);
-    _camera->dir = glm::normalize(glm::vec3(0.f, -0.1f, .1f));*/
-    // END DEBUG
-
     //
     // Lines below copy adresses given by the GPU the stack-allocated
     // SceneData struct.
@@ -341,7 +400,8 @@ namespace scene
     //
     upload_attribute(attrib.vertices, _scene_data->vertices);
     upload_attribute(attrib.normals, _scene_data->normals);
-    upload_materials(materials, _scene_data->materials);
+    upload_attribute(attrib.texcoords, _scene_data->texcoords);
+    upload_materials(materials, _scene_data, base_folder);
     upload_meshes(shapes, _scene_data->meshes);
 
     // Now the sceneData struct contains pointers to memory adresses

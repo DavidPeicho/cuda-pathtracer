@@ -33,6 +33,16 @@ union rgba_24
 	};
 };
 
+struct IntersectionData
+{
+  float dist;
+  glm::vec3 normal;
+  glm::vec3 diffuse_col;
+  glm::vec3 normal_col;
+  const scene::LightProp *light;
+  bool is_light;
+};
+
 HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
             const int half_w, const int half_h, const scene::Camera &cam)
@@ -51,7 +61,9 @@ generateRay(const int x, const int y,
 }
 
 __device__ inline bool
-intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, float& t)
+intersectTriangle(const glm::vec3 *vert, const glm::vec3 *v_norm,
+  const glm::vec2 *v_uv, glm::vec3 &out_normal, glm::vec2 &out_uv,
+  const scene::Ray &ray, float& t)
 {
 	glm::vec3 v0v1 = vert[1] - vert[0];
 	glm::vec3 v0v2 = vert[2] - vert[0];
@@ -68,6 +80,12 @@ intersectTriangle(const glm::vec3 *vert, const scene::Ray &ray, float& t)
 	glm::vec3 qvec = glm::cross(t_vec, v0v1);
 	float v = glm::dot(ray.dir, qvec) * inv_det;
 	if (v < 0 || u + v > 1) return false;
+
+  // Interpolates normals
+  //out_normal = (1.0f - u - v) * v_norm[0] + u * v_norm[1] + v * v_norm[2];
+  out_normal = v_norm[0];
+  // Interpolates uvs
+  out_uv = (1.0f - u - v) * v_uv[0] + u * v_uv[1] + v * v_uv[2];
 
 	t = glm::dot(v0v2, qvec) * inv_det;
 	return true;
@@ -90,15 +108,19 @@ intersectSphere(const scene::Ray &r, const scene::LightProp & const light, float
 }
 
 __device__ inline bool
-intersect(const scene::Ray& r, const struct scene::SceneData *const scene,
-  glm::vec3& normal, float& t, scene::Material& material_out, scene::LightProp &light_out, bool& is_light)
+intersect(const scene::Ray& r,
+  const struct scene::SceneData *const scene, IntersectionData &intersection)
 {
   static const float MAX_DIST = 100000.0;
   float inter_dist = MAX_DIST;
+  intersection.dist = MAX_DIST;
 
-	glm::vec3 light_pos = glm::vec3(0.0f, -0.1f, 0.0f);
 	glm::vec3 vertex[3];
   glm::vec3 v_normal[3];
+  glm::vec2 v_uv[3];
+
+  glm::vec3 normal;
+  glm::vec2 uv;
 
   // Checks meshes intersection
 	for (size_t m = 0; m < scene->meshes.size; ++m)
@@ -115,13 +137,27 @@ intersect(const scene::Ray& r, const struct scene::SceneData *const scene,
         v_normal[v].x = scene->normals.data[3 * idx.normal_index];
         v_normal[v].y = scene->normals.data[3 * idx.normal_index + 1];
         v_normal[v].z = scene->normals.data[3 * idx.normal_index + 2];
+        v_uv[v].x = scene->texcoords.data[2 * idx.texcoord_index];
+        v_uv[v].y = scene->texcoords.data[2 * idx.texcoord_index + 1];
 			}
-			if (intersectTriangle(vertex, r, inter_dist) && inter_dist < t && inter_dist > 0.0)
+			if (intersectTriangle(vertex, v_normal, v_uv, normal, uv, r, inter_dist)
+          && inter_dist < intersection.dist && inter_dist > 0.0)
 			{
-        t = inter_dist;
-        normal = v_normal[0]; // For now, use the first normal, next step is to interpolate.
-        material_out = scene->materials.data[mesh.material_ids.data[i / 3]];
-        is_light = false;
+        const scene::Material& mat = scene->materials.data[mesh.material_ids.data[i / 3]];
+        intersection.dist = inter_dist;
+        intersection.normal = normal;
+        if (mat.diffuse_map >= 0)
+        {
+          const scene::Texture &tex = scene->textures.data[mat.diffuse_map];
+          int x = uv.x * (tex.w - 1);
+          int y = uv.y * (tex.h - 1);
+          int idx = (y * tex.w + x) * 3;
+          intersection.diffuse_col = glm::vec3(tex.data[idx], tex.data[idx + 1], tex.data[idx + 2]);
+        }
+        else
+          intersection.diffuse_col = glm::vec3(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]);
+        intersection.is_light = false;
+        intersection.light = NULL;
 			}
 		}
 	}
@@ -131,15 +167,18 @@ intersect(const scene::Ray& r, const struct scene::SceneData *const scene,
   {
     // Checks lights intersection
     const scene::LightProp &const light = scene->lights.data[l];
-    if (intersectSphere(r, light, inter_dist) && inter_dist < t && inter_dist >= 0.0)
+    if (intersectSphere(r, light, inter_dist)
+        && inter_dist < intersection.dist && inter_dist >= 0.0)
     {
-      is_light = true;
-      light_out = light;
-      t = inter_dist;
+      intersection.is_light = true;
+      intersection.light = &light;
+      intersection.dist = inter_dist;
+      intersection.diffuse_col = glm::vec3(light.color[0], light.color[1], light.color[2]);
+      intersection.normal = glm::normalize(light.vec - (inter_dist * r.dir));
     }
   }
 
-	return t < MAX_DIST;
+	return intersection.dist < MAX_DIST;
 }
 
 #define M_PI 3.14159265359f
@@ -216,29 +255,27 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 {
   glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
 
+  // Contains information about each intersection.
+  // This will be updated at each call to 'intersect'.
+  IntersectionData inter;
+
   //const int max_bounces = 1 + is_static * (static_samples + 1);
   const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
-    glm::vec3 normal;
     glm::vec3 oriented_normal;
     // For energy compensation on Russian roulette
     glm::vec3 thoughput = glm::vec3(1.0f);
-    float t = 100000;
 
-    scene::Material material;
-    scene::LightProp light;
-    bool light_emitter = false;
-
-    if (intersect(r, scene, normal, t, material, light, light_emitter))
+    if (intersect(r, scene, inter))
     {
-      float cos_theta = glm::dot(normal, r.dir);
-      oriented_normal = cos_theta < 0 ? normal : normal * -1.0f;
+      float cos_theta = glm::dot(inter.normal, r.dir);
+      oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 
       //acc += mask * emission * (float)light_emitter * intersection;
-      if (light_emitter)
+      if (inter.is_light)
       {
-        acc += light.emission * thoughput;
+        acc += inter.light->emission * thoughput;
         continue;
       }
 
@@ -258,21 +295,22 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
       // Oren-Nayar diffuse
       //glm::vec3 BRDF = brdf_oren_nayar(cos_theta, n_dot_l, light_dir, r.dir, oriented_normal, 0.1f, 0.99f, color);
-      r.origin += r.dir * t;
+      r.origin += r.dir * inter.dist;
 
       r.origin += oriented_normal * 0.03f;
       r.dir = d;
 
       //mask *= intersection * color + (1.0f - intersection) * 1.0f;
       //Lambert BRDF/PDF
-      glm::vec3 diffuse = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
-      glm::vec3 BRDF = diffuse /** n_dot_l*/; // Divided by PI
+      //glm::vec3 BRDF = inter.diffuse_col /** n_dot_l*/; // Divided by PI
+      glm::vec3 BRDF = inter.diffuse_col /** n_dot_l*/; // Divided by PI
       float PDF = cos_theta; // Divided by PI
                              //glm::vec3 BRDF = color;
       glm::vec3 direct_light = BRDF / PDF;
       thoughput *= direct_light;
 
-      acc += thoughput * sample_lights(r, scene->lights, diffuse, PDF, normal);
+      acc = BRDF;
+      //acc += thoughput * sample_lights(r, scene->lights, inter.diffuse_col, PDF, inter.normal);
 
       // Russian roulette
       float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));

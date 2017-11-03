@@ -12,6 +12,13 @@ namespace scene
     T *data;
   };
 
+  struct Texture
+  {
+    unsigned int w;
+    unsigned int h;
+    float *data;
+  };
+
   struct Mesh
   {
     struct Buffer<tinyobj::index_t> indices;
@@ -23,8 +30,10 @@ namespace scene
     struct Buffer<struct Mesh> meshes;
     struct Buffer<tinyobj::real_t> vertices;
     struct Buffer<tinyobj::real_t> normals;
+    struct Buffer<tinyobj::real_t> texcoords;
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
+    struct Buffer<struct Texture> textures;
   };
 
   struct Material
@@ -35,6 +44,7 @@ namespace scene
     tinyobj::real_t transmittance[3];
     tinyobj::real_t emission[3];
     tinyobj::real_t shininess;
+    int diffuse_map;
   };
 
   struct LightProp
