@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -21,6 +21,7 @@
     <ClInclude Include="src\raytrace.h" />
     <ClInclude Include="src\scene.h" />
     <ClInclude Include="src\scene_data.h" />
+    <ClInclude Include="src\material_loader.h" />
     <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -30,6 +31,7 @@
     <ClCompile Include="src\driver\interop.cpp" />
     <ClCompile Include="src\gpu_processor.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\material_loader.cpp" />
     <ClCompile Include="src\scene.cpp" />
     <ClCompile Include="src\utils.cpp" />
   </ItemGroup>

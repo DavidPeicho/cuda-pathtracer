@@ -14,8 +14,9 @@ namespace scene
 
   struct Texture
   {
-    unsigned int w;
-    unsigned int h;
+    int w;
+    int h;
+    int nb_chan;
     float *data;
   };
 
@@ -38,14 +39,7 @@ namespace scene
 
   struct Material
   {
-    tinyobj::real_t ambient[3];
-    tinyobj::real_t diffuse[3];
-    tinyobj::real_t specular[3];
-    tinyobj::real_t transmittance[3];
-    tinyobj::real_t emission[3];
-    tinyobj::real_t shininess;
-    int diffuse_map;
-    int spec_map;
+    unsigned int diffuse_spec_map;
   };
 
   struct LightProp

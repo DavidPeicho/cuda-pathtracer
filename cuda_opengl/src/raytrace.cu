@@ -51,12 +51,11 @@ struct IntersectionData
 */
 
 __device__ inline int
-getTextureIdx(const scene::Texture &texture, const glm::vec2& uv,
-  unsigned int nb_channels)
+getTextureIdx(const scene::Texture &texture, const glm::vec2& uv)
 {
   int x = uv.x * (texture.w - 1);
   int y = uv.y * (texture.h - 1);
-  return (y * texture.w + x) * nb_channels;
+  return (y * texture.w + x) * texture.nb_chan;
 }
 
 __device__ void
@@ -64,21 +63,11 @@ sampleTexture(const scene::Buffer<scene::Texture>& textures,
   int tex_id, const glm::vec2& uv, glm::vec3& out)
 {
   const scene::Texture &tex = textures.data[tex_id];
-  int idx = getTextureIdx(tex, uv, 3);
+  int idx = getTextureIdx(tex, uv);
 
   out.x = tex.data[idx];
   out.y = tex.data[idx + 1];
   out.z = tex.data[idx + 2];
-}
-
-__device__ void
-sampleTexture(const scene::Buffer<scene::Texture>& textures,
-  int tex_id, const glm::vec2& uv, float& out)
-{
-  const scene::Texture &tex = textures.data[tex_id];
-  int idx = getTextureIdx(tex, uv, 1);
-
-  out = tex.data[idx];
 }
 
 HOST_DEVICE inline scene::Ray
@@ -186,13 +175,14 @@ intersect(const scene::Ray& r,
         intersection.dist = inter_dist;
         intersection.normal = normal;
 
-        if (mat.diffuse_map >= 0)
+        sampleTexture(scene->textures, mat.diffuse_spec_map, uv, intersection.diffuse_col);
+        /*if (mat.diffuse_map >= 0)
           sampleTexture(scene->textures, mat.diffuse_map, uv, intersection.diffuse_col);
         else
           intersection.diffuse_col = glm::vec3(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]);
 
         if (mat.spec_map >= 0)
-          sampleTexture(scene->textures, mat.spec_map, uv, intersection.specular_col);
+          sampleTexture(scene->textures, mat.spec_map, uv, intersection.specular_col);*/
 
         intersection.is_light = false;
         intersection.light = NULL;

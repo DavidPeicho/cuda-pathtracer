@@ -11,15 +11,14 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
-
 #include <sstream>
 #include <string>
 
 #include <unordered_map>
 
 #include "driver/cuda_helper.h"
+
+#include "material_loader.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "scene.h"
@@ -166,97 +165,44 @@ namespace scene
                           scene::SceneData *scene,
                           const std::string& base_folder)
     {
-      Buffer<scene::Material> &out_materials = scene->materials;
-      // The 'tex_id' and 'tex_map' variables allows to associate
-      // to each texture a unique ID. If several materials share a texture, they
-      // will share the same ID.
-      // Texture will be loaded at the end, by looping through the map.
-      static int tex_id = 0;
-      std::unordered_map<std::string, int> tex_map;
+      MaterialLoader mat_loader(materials, base_folder);
 
-      // The function below handles the texture map. If the texture already
-      // exists, it simply use the predefined id. If it does not exist yet,
-      // it creates a new id.
-      auto registerOrGetTexture = [&tex_map](const std::string& tex_name)
+      std::vector<scene::Texture> cpu_textures;
+      std::vector<scene::Material> cpu_mat;
+
+      mat_loader.load(cpu_textures, cpu_mat);
+
+      std::vector<scene::Texture> gpu_textures(cpu_textures.size());
+
+      // Uploads every textures to the GPU
+      for (size_t i = 0; i < cpu_textures.size(); ++i)
       {
-        if (tex_name.empty()) return -1;
+        const scene::Texture &cpu_tex = cpu_textures[i];
+        scene::Texture &gpu_tex = gpu_textures[i];
+        gpu_tex.w = cpu_tex.w;
+        gpu_tex.h = cpu_tex.h;
+        gpu_tex.nb_chan = cpu_tex.nb_chan;
 
-        if (!tex_map.count(tex_name))
-          tex_map[tex_name] = tex_id++;
-
-        return tex_map[tex_name];
-      };
-
-      size_t nb_mat = materials.size();
-      size_t nb_bytes = nb_mat * sizeof(Material);
-      Material *tmp_materials = new Material[nb_mat];
-
-      // This is gross, but I did not find a way to copy the
-      // data inside the struct directly on the GPU memory.
-      for (size_t i = 0; i < nb_mat; ++i)
+        size_t nb_bytes = cpu_tex.w * cpu_tex.h * cpu_tex.nb_chan * sizeof(float);
+        cudaMalloc(&gpu_tex.data, nb_bytes);
+        cudaThrowError();
+        cudaMemcpy(gpu_tex.data, cpu_tex.data, nb_bytes, cudaMemcpyHostToDevice);
+      }
+      if (gpu_textures.size())
       {
-        const auto &tiny_mat = materials[i];
-        Material &mat = tmp_materials[i];
-        memcpy(&mat.ambient, &tiny_mat.ambient, 3 * sizeof (Real));
-        memcpy(&mat.diffuse, &tiny_mat.diffuse, 3 * sizeof(Real));
-        memcpy(&mat.specular, &tiny_mat.specular, 3 * sizeof(Real));
-        memcpy(&mat.transmittance, &tiny_mat.transmittance, 3 * sizeof(Real));
-        memcpy(&mat.emission, &tiny_mat.emission, 3 * sizeof(Real));
-        memcpy(&mat.shininess, &tiny_mat.shininess, sizeof(Real));
-        mat.diffuse_map = registerOrGetTexture(tiny_mat.diffuse_texname);
-        mat.spec_map = registerOrGetTexture(tiny_mat.specular_texname);
+        cudaMalloc(&scene->textures.data, cpu_textures.size() * sizeof(scene::Texture));
+        cudaThrowError();
+        cudaMemcpy(scene->textures.data, &gpu_textures[0], cpu_textures.size() * sizeof(scene::Texture), cudaMemcpyHostToDevice);
       }
 
-      out_materials.size = nb_mat;
-      cudaMalloc(&out_materials.data, nb_bytes);
-      cudaThrowError();
-      cudaMemcpy(out_materials.data, tmp_materials, nb_bytes,
-        cudaMemcpyHostToDevice);
-      cudaThrowError();
-
-      // Deletes temporary materials after they have been sent
-      // to the GPU.
-      delete tmp_materials;
-
-      // We know all the textures we have to load, it is time
-      // to load them.
-      std::vector<scene::Texture> textures(tex_map.size());
-
-      // TODO: Pack some textures together, such as spec map + normal_map, etc...
-      std::for_each(std::begin(tex_map), std::end(tex_map),
-      [&base_folder, &textures](const std::pair<std::string, int>& pair)
+      // Uploads every materials to the GPU
+      if (cpu_mat.size())
       {
-        std::string full_path = base_folder + "/" + pair.first;
-        int w = 0;
-        int h = 0;
-        int nb_chan = 0;
-        float *img = stbi_loadf(full_path.c_str(), &w, &h, &nb_chan, STBI_default);
-
-        scene::Texture &texture = textures[pair.second];
-
-        texture.w = w;
-        texture.h = h;
-        cudaMalloc(&texture.data, nb_chan * w * h * sizeof(float));
+        cudaMalloc(&scene->materials.data, cpu_mat.size() * sizeof(scene::Material));
         cudaThrowError();
-        cudaMemcpy(texture.data, img, nb_chan * w * h * sizeof(float),
-          cudaMemcpyHostToDevice);
-        // When the texture is upload, it can be freed from
-        // the RAM.
-        stbi_image_free(img);
-      });
-
-      // Sends texture to the GPU.
-      if (textures.size())
-      {
-        scene->textures.size = textures.size();
-        size_t nb_tex_bytes = sizeof(scene::Texture) * textures.size();
-        cudaMalloc(&scene->textures.data, nb_tex_bytes);
-        cudaThrowError();
-        cudaMemcpy(scene->textures.data, &textures[0], nb_tex_bytes,
-          cudaMemcpyHostToDevice);
+        cudaMemcpy(scene->materials.data, &cpu_mat[0], cpu_mat.size() * sizeof(scene::Material), cudaMemcpyHostToDevice);
       }
 
-      tex_id = 0;
     }
 
     void upload_meshes(const ShapeVector &shapes, Buffer<Mesh> &out_meshes)
