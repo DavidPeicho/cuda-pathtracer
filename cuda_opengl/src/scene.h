@@ -21,7 +21,7 @@ namespace scene
       upload(bool is_cpu);
 
       void
-      release(bool is_cpu);
+      release();
 
       const inline struct SceneData *
       getScenePointer()

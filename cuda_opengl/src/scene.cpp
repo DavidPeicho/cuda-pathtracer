@@ -203,6 +203,8 @@ namespace scene
         cudaMemcpy(scene->materials.data, &cpu_mat[0], cpu_mat.size() * sizeof(scene::Material), cudaMemcpyHostToDevice);
       }
 
+      scene->materials.size = cpu_mat.size();
+      scene->textures.size = cpu_mat.size();
     }
 
     void upload_meshes(const ShapeVector &shapes, Buffer<Mesh> &out_meshes)
@@ -325,7 +327,7 @@ namespace scene
   }
 
   void
-  Scene::release(bool is_cpu)
+  Scene::release()
   {
     if (!_uploaded || !_ready)
       return;
@@ -363,33 +365,55 @@ namespace scene
   void
   Scene::release_gpu()
   {
-    delete _camera;
-    delete _scene_data->lights.data;
+    // FIRST: Frees texture by first retrieving pointer from the GPU,
+    // and then calling cudaFree to free GPU pointed adress.
 
-    delete _scene_data;
+    size_t nb_tex = _scene_data->textures.size;
+    scene::Texture *textures = new scene::Texture[nb_tex];
+    cudaMemcpy(textures, _scene_data->textures.data,
+      nb_tex * sizeof(scene::Texture), cudaMemcpyDeviceToHost);
+    cudaError_t e = cudaGetLastError();
+    //std::string toto = cudaGetErrorString(e);
+     //std::cout << toto << std::endl;
 
-    // Free one-depth pointer, saved on the host stack.
-    /*cudaFree(_sceneData.cam);
-    cudaFree(_sceneData.vertices.data);
-    cudaFree(_sceneData.normals.data);
-    cudaFree(_sceneData.materials.data);
+    for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
+    delete textures;
 
-    size_t nb_meshes = _sceneData.meshes.size;
-    Mesh *meshes_to_free = new Mesh[nb_meshes];
+    // SECOND: Frees meshes by first retrieving pointer from the GPU,
+    // and then calling cudaFree to free GPU pointed adress.
+    // Here, we have a depth of 2 regarding the allocation.
 
-    // Copies back from GPU all meshes, which have pointers to
-    // allocated memory blocks.
-    cudaMemcpy(meshes_to_free, _sceneData.meshes.data, nb_meshes * sizeof(Mesh),
-      cudaMemcpyDeviceToHost);
+    size_t nb_meshes = _scene_data->meshes.size;
+    scene::Mesh *meshes = new scene::Mesh[nb_meshes];
+    cudaMemcpy(meshes, _scene_data->meshes.data,
+      nb_meshes * sizeof(scene::Mesh), cudaMemcpyDeviceToHost);
 
     for (size_t i = 0; i < nb_meshes; ++i)
     {
-      cudaFree(meshes_to_free->indices.data);
-      cudaFree(meshes_to_free->material_ids.data);
+      const Mesh& mesh = meshes[i];
+      cudaFree(mesh.indices.data);
+      cudaFree(mesh.material_ids.data);
     }
-    cudaFree(_d_sceneData->meshes.data);
+    delete meshes;
 
-    _uploaded = false;*/
+    // Frees vertices
+    cudaFree(_scene_data->vertices.data);
+    // Frees normals
+    cudaFree(_scene_data->normals.data);
+    // Frees texcoords
+    cudaFree(_scene_data->texcoords.data);
+    // Frees texcoords
+    cudaFree(_scene_data->materials.data);
+    // Frees lights
+    cudaFree(_scene_data->lights.data);
+
+    // THIRD: we can now delete the struct pointer.
+    cudaFree(_d_scene_data);
+
+    delete _camera;
+    delete _scene_data;
+
+    _uploaded = false;
   }
 
 } // namespace scene

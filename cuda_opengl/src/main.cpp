@@ -74,6 +74,9 @@ glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
   if (key < 0 || key >= 1024) return;
 
+  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    glfwSetWindowShouldClose(window, true);
+
 	processor->setKeyState(key, action != GLFW_RELEASE);
 }
 
@@ -104,8 +107,6 @@ main(int argc, char* argv[])
   glfw_init(&window, window_w, window_h);
 
   // Parses selected scene using TinyObjLoader.
-  //scene::Scene scene(argv[1]);
-  //scene::Scene scene("assets/cornell.scene");
   scene::Scene scene("assets/crate_land.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
@@ -118,7 +119,7 @@ main(int argc, char* argv[])
 	unsigned int pow2_width = utils::nextPow2(width);
 	unsigned int pow2_height = utils::nextPow2(height);
 
-	glfwSetWindowUserPointer(window, &processor);
+  glfwSetWindowUserPointer(window, &processor);
 	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
 	glfwSetKeyCallback(window, glfw_key_callback);
 	glfwSetCursorPosCallback(window, glfw_mouse_callback);
@@ -166,11 +167,13 @@ main(int argc, char* argv[])
     elapsed += delta;
 	}
 
+  cudaDeviceSynchronize();
+  scene.release();
+
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
 	cudaDeviceReset();
-	//scene.release();
 
 	exit(EXIT_SUCCESS);
 }

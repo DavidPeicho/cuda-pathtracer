@@ -51,7 +51,16 @@ namespace scene
       int w = 0;
       int h = 0;
       int nb_chan = 0;
-      float *data = stbi_loadf(full_path.c_str(), &w, &h, &nb_chan, STBI_default);
+      float *tmp = stbi_loadf(full_path.c_str(), &w, &h, &nb_chan, STBI_default);
+
+      // This is actually gross, we duplicate the data in order
+      // to free it easily later. If we do not use this, we will
+      // be stuck in the dtor to free the textures.
+      float *data = new float[w * h * nb_chan];
+      std::memcpy(data, tmp, w * h * nb_chan * sizeof(float));
+
+      stbi_image_free(tmp);
+
       loaded_tex[tex] = Texture{
         w, h, nb_chan, data
       };
@@ -72,7 +81,16 @@ namespace scene
     size_t s = _textures.size();
     for (size_t i = 0; i < s; ++i) delete _textures[i].data;
 
-    //for (auto& pair : _loaded_tex) stbi_image_free(pair.second.data);
+    // Some textures were directly added into the '_textures' vector.
+    // These textures were not packed so no intermediary allocation was made.
+    // We have to take this into account while freeing the memory.
+
+    for (auto& pair : _loaded_tex)
+    {
+      // Texture has been loaded but not used
+      // directly by itself, it should be freed.
+      if (!_packed_tex.count(pair.first)) delete pair.second.data;
+    }
   }
 
   void
@@ -220,6 +238,8 @@ namespace scene
       {
         float *new_data = new float[a_tex.w * a_tex.h * 3];
         stbir_resize_float(rgb_tex.data, rgb_tex.w, rgb_tex.h, 0, new_data, a_tex.w, a_tex.h, 0, 3);
+        delete rgb_tex.data;
+
         rgb_tex.w = a_tex.w;
         rgb_tex.h = a_tex.h;
         rgb_tex.data = new_data;
@@ -228,6 +248,8 @@ namespace scene
       {
         float *new_data = new float[rgb_tex.w * rgb_tex.h * 1];
         stbir_resize_float(a_tex.data, a_tex.w, a_tex.h, 0, new_data, rgb_tex.w, rgb_tex.h, 0, 1);
+        delete a_tex.data;
+
         a_tex.w = a_tex.w;
         a_tex.h = a_tex.h;
         a_tex.data = new_data;
