@@ -6,6 +6,7 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 #include <stdexcept>
+#include <cstring>
 
 #include "gpu_info.h"
 
@@ -36,7 +37,7 @@ namespace driver
     gpu->shared_mem_block = deviceProp.sharedMemPerBlock;
     gpu->max_threads_per_block = deviceProp.maxThreadsPerBlock;
     gpu->multiproc_count = deviceProp.multiProcessorCount;
-    memcpy(&gpu->max_threads_dim, &deviceProp.maxThreadsDim, 3 * sizeof (int));
+    std::memcpy(&gpu->max_threads_dim, &deviceProp.maxThreadsDim, 3 * sizeof (int));
 
     // For now, we only handle one GPU It would be nice to handle two or more
     // GPUs, and to choose them according to some heuristics.
