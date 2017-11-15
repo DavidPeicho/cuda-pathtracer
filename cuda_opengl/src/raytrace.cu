@@ -87,6 +87,7 @@ generateRay(const int x, const int y,
 
   ray.dir = screen_pos - cam.position;
   ray.dir = glm::normalize(ray.dir);
+
   return ray;
 }
 
@@ -289,17 +290,35 @@ exposure(glm::vec3 color)
 }
 
 __device__ inline glm::vec3
-sample_lights(scene::Ray& r, const scene::Buffer<scene::LightProp>& lights,
-  float PDF, const IntersectionData& inter)
+sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
+			  float PDF, const IntersectionData& inter)
 {
 	glm::vec3 L = glm::vec3(0.0f);
+	const scene::Buffer<scene::LightProp>& lights = scene->lights;
 	for (int i = 0; i < lights.size; i++)
 	{
-    const scene::LightProp& const l = lights.data[i];
-    glm::vec3 tangent_light_dir = inter.tbn * (l.vec - r.origin);
+		const scene::LightProp& const l = lights.data[i];
+		scene::LightProp light;
+		glm::vec3 light_dir = l.vec - r.origin;
 
-		float n_dot_l = glm::dot(inter.normal, tangent_light_dir);
-		L += inter.diffuse_col * n_dot_l * l.emission / PDF;
+		IntersectionData in;
+
+		scene::Ray r_l;
+		r_l.dir = light_dir;
+		r_l.origin = r.origin;
+		if (intersect(r_l, scene, in))
+		{
+			if (!inter.is_light)
+				continue;
+
+			if (l.vec == inter.light->vec)
+				continue;
+		
+			glm::vec3 tangent_light_dir = in.tbn * light_dir;
+
+			float n_dot_l = glm::dot(in.normal, tangent_light_dir);
+			L += inter.diffuse_col * n_dot_l * l.emission / PDF;
+		}
 	}
 
 	return L;
@@ -309,72 +328,95 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   const struct scene::SceneData *const scene, const scene::Camera * const cam,
   curandState* rand_state, int is_static, int static_samples)
 {
-  glm::vec3 acc = glm::vec3(0.0f, 0.0f, 0.0f);
+  glm::vec3 acc = glm::vec3(0.0f);
+  // For energy compensation on Russian roulette
+  glm::vec3 thoughput = glm::vec3(1.0f);
 
   // Contains information about each intersection.
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  //const int max_bounces = 1 + is_static * (static_samples + 1);
-  const int max_bounces = 1;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
   for (int b = 0; b < max_bounces; b++)
   {
-    glm::vec3 oriented_normal;
-    // For energy compensation on Russian roulette
-    glm::vec3 thoughput = glm::vec3(1.0f);
+	  glm::vec3 oriented_normal;
 
-    if (intersect(r, scene, inter))
-    {
-      float cos_theta = glm::dot(inter.normal, r.dir);
-      oriented_normal = cos_theta < 0 ? inter.surface_normal : inter.surface_normal * -1.0f;
+	  if (intersect(r, scene, inter))
+	  {
+		  float cos_theta = glm::dot(inter.normal, r.dir);
+		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 
-      //acc += mask * emission * (float)light_emitter * intersection;
-      if (inter.is_light)
-      {
-        acc += inter.light->emission * thoughput;
-        continue;
-      }
+		  //acc += mask * emission * (float)light_emitter * intersection;
 
-      float r1 = curand_uniform(rand_state);
-      float phi = 2.0f * M_PI * curand_uniform(rand_state);
+		  float r1 = curand_uniform(rand_state);
 
-      float sin_t = sqrtf(r1);
-      float cos_t = sqrt(1.f - r1);
+		  glm::vec3 BRDF; /** n_dot_l*/; // Divided by PI
+		  glm::vec3 d;
+		  float phi = 2.0f * M_PI * curand_uniform(rand_state);
 
-      glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
-      glm::vec3 v = glm::cross(oriented_normal, u);
+		  float sin_t = sqrtf(r1);
+		  float cos_t = sqrt(1.f - r1);
 
-      //Diffuse hemishphere reflection
-      glm::vec3 d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
-      //Specular model (Snell's law)
-      //glm::vec3 d = r.dir - 2.0f * oriented_normal * cos_theta;
+		  glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
+		  glm::vec3 v = glm::cross(oriented_normal, u);
 
-      // Oren-Nayar diffuse
-      //glm::vec3 BRDF = brdf_oren_nayar(cos_theta, n_dot_l, light_dir, r.dir, oriented_normal, 0.1f, 0.99f, color);
-      r.origin += r.dir * inter.dist;
+		  //Diffuse hemishphere reflection
+		  d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
 
-      r.origin += oriented_normal * 0.03f;
-      r.dir = d;
+		  // Oren-Nayar diffuse
+		  glm::vec3 light_dir = inter.light->vec - r.origin;
+		  float n_dot_l = glm::dot(oriented_normal, light_dir);
+		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
+		  BRDF = inter.diffuse_col; // Divided by PI
+		  /*
+		  {
+			  //Specular model (Snell's law)
+			  glm::vec3 d = glm::reflect(r.dir, oriented_normal);
 
-      //mask *= intersection * color + (1.0f - intersection) * 1.0f;
-      //Lambert BRDF/PDF
-      //glm::vec3 BRDF = inter.diffuse_col /** n_dot_l*/; // Divided by PI
-      glm::vec3 BRDF = inter.diffuse_col /** n_dot_l*/; // Divided by PI
-      float PDF = cos_theta; // Divided by PI
-                             //glm::vec3 BRDF = color;
-      glm::vec3 direct_light = BRDF / PDF;
-      thoughput *= direct_light;
+			  BRDF = glm::vec3(inter.diffuse_col) / 0.4f;
+		  }*/
 
-      return BRDF;
-      acc += thoughput * sample_lights(r, scene->lights, PDF, inter);
+		  if (inter.is_light)
+		  {
+			  acc += inter.light->emission * thoughput;
 
-      // Russian roulette
-      float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
-      if (r1 > p)
-        return acc;
+			  float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+			  if (r1 > p && b > 1)
+				  return acc;
 
-      thoughput *= 1.f / p;
-    }
+			  thoughput *= 1.0 / p;
+
+			  BRDF = glm::vec3(inter.light->color[0], inter.light->color[1], inter.light->color[2]);
+		  }
+		  
+		  r.origin += r.dir * inter.dist;
+
+		  r.origin += oriented_normal * 0.03f;
+		  r.dir = d;
+
+		  //mask *= intersection * color + (1.0f - intersection) * 1.0f;
+		  //Lambert BRDF/PDF
+		  //glm::vec3 BRDF = inter.diffuse_col /** n_dot_l*/; // Divided by PI
+		  float PDF = 0.5f; // Divided by PI
+		  glm::vec3 direct_light = BRDF;
+
+		  thoughput *= direct_light;
+		  //acc += thoughput;// *sample_lights(r, scene, PDF, inter);
+
+		  //if (is_static)
+		  /*if (is_static)
+			acc += thoughput * sample_lights(r, scene, PDF, inter);*/
+		  //thoughput *= max(0.0, glm::dot(r.dir, oriented_normal));
+
+		  // Russian roulette
+		  float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+		  if (r1 > p && b > 1)
+			  return acc;
+
+		  thoughput *= 1.0 / p;
+	  }
+	  else
+		  return glm::vec3(0.0f);
   }
 
   return acc;
@@ -402,15 +444,26 @@ kernel(const unsigned int width, const unsigned int height,
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
 	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
+	
+	//Focus dist
+	/*glm::vec3 focalPoint = 2.f * r.dir;
+	float randomAngle = curand_uniform(&rand_state) * 2.0f * M_PI;
+	float randomRadius = curand_uniform(&rand_state) * 0.5f;
+	glm::vec3  randomAperturePos = ( cos(randomAngle) * cam.u + sin(randomAngle) * cam.v ) * randomRadius;
+	// point on aperture to focal point
+	glm::vec3 finalRayDir = normalize(focalPoint - randomAperturePos);
+	
+	r.origin += randomAperturePos;
+	r.dir = finalRayDir;*/
 
 	int is_static = !moved;
 	int static_samples = 1;
 	int samples = 2 + is_static * static_samples;
 
-  glm::vec3 rad = glm::vec3(0.0f);
+    glm::vec3 rad = glm::vec3(0.0f);
 	for (int i = 0; i < samples; i++)
 		rad += radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-  rad /= samples;
+    rad /= samples;
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 
