@@ -16,7 +16,8 @@
 
 #include <iostream>
 
-//#define EPSILON 0.0000001;
+#include "brdf.cuh"
+#include "post_process.cuh"
 
 surface<void, cudaSurfaceType2D> surf;
 
@@ -238,58 +239,7 @@ intersect(const scene::Ray& r,
 
 #define M_PI 3.14159265359f
 
-__device__ inline glm::vec3
-brdf_oren_nayar(float n_dot_v, float n_dot_l, glm::vec3 light_dir, glm::vec3 view_dir,
-						  glm::vec3 n, float roughness, float metalness, glm::vec3 base_color)
-{
-	float angle_v_n = acos(n_dot_v);
-	float angle_l_n = acos(n_dot_l);
-
-	float alpha = max(angle_v_n, angle_l_n);
-	float beta = min(angle_v_n, angle_l_n);
-	float gamma = dot(view_dir - n * n_dot_v, light_dir - n * n_dot_l);
-
-	float roughness_2 = roughness * roughness;
-
-	float A = 1.0 - 0.5 * (roughness_2 / (roughness_2 + 0.57));
-	float B = 0.45 * (roughness_2 / (roughness_2 + 0.09));
-	float C = sin(alpha) * tan(beta);
-
-	float L1 = max(0.0, n_dot_l) * (A + B * max(0.0, gamma) * C);
-
-	glm::vec3 color = base_color;
-	color = glm::mix(color, glm::vec3(0.0), metalness);
-
-	return glm::vec3(glm::vec3(color) * glm::vec3(L1));
-}
-
-__device__ inline glm::vec3
-uncharted_tonemap(glm::vec3 x)
-{
-   const float A = 0.15;
-   const float B = 0.50;
-   const float C = 0.10;
-   const float D = 0.20;
-   const float E = 0.02;
-   const float F = 0.30;
-   const float W = 11.2;
-
-   return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
-}
-
-__device__ inline glm::vec3
-exposure(glm::vec3 color)
-{
-  const float exposure_bias = 2.0f;
-  glm::vec3 curr = uncharted_tonemap(exposure_bias * color);
-
-  const glm::vec3 W = glm::vec3(11.2);
-  glm::vec3 white_scale = 1.0f / uncharted_tonemap(W);
-
-  return curr * white_scale;
-}
-
-__device__ inline glm::vec3
+/*__device__ inline glm::vec3
 sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
 			  float PDF, const IntersectionData& inter)
 {
@@ -322,7 +272,7 @@ sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
 	}
 
 	return L;
-}
+}*/
 
 __device__ inline glm::vec3 radiance(scene::Ray& r,
   const struct scene::SceneData *const scene, const scene::Camera * const cam,
@@ -346,28 +296,14 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  float cos_theta = glm::dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 
-		  //acc += mask * emission * (float)light_emitter * intersection;
-
 		  float r1 = curand_uniform(rand_state);
 
-		  glm::vec3 BRDF; /** n_dot_l*/; // Divided by PI
-		  glm::vec3 d;
-		  float phi = 2.0f * M_PI * curand_uniform(rand_state);
-
-		  float sin_t = sqrtf(r1);
-		  float cos_t = sqrt(1.f - r1);
-
-		  glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
-		  glm::vec3 v = glm::cross(oriented_normal, u);
-
-		  //Diffuse hemishphere reflection
-		  d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
+		  glm::vec3 BRDF;
 
 		  // Oren-Nayar diffuse
-		  glm::vec3 light_dir = inter.light->vec - r.origin;
-		  float n_dot_l = glm::dot(oriented_normal, light_dir);
-		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
-		  BRDF = inter.diffuse_col; // Divided by PI
+		  //glm::vec3 light_dir = inter.light->vec - r.origin;
+		  //float n_dot_l = glm::dot(oriented_normal, light_dir);
+		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col
 		  /*
 		  {
 			  //Specular model (Snell's law)
@@ -388,25 +324,36 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 			  BRDF = glm::vec3(inter.light->color[0], inter.light->color[1], inter.light->color[2]);
 		  }
+		  else
+			  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
 		  
+		  glm::vec3 d;
+		  float phi = 2.0f * M_PI * curand_uniform(rand_state) * glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
+
+		  float sin_t = sqrtf(r1);
+		  float cos_t = sqrt(1.f - r1);
+
+		  glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
+		  glm::vec3 v = glm::cross(oriented_normal, u);
+
+		  //Diffuse hemishphere reflection
+		  d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
 		  r.origin += r.dir * inter.dist;
 
 		  r.origin += oriented_normal * 0.03f;
 		  r.dir = d;
 
-		  //mask *= intersection * color + (1.0f - intersection) * 1.0f;
 		  //Lambert BRDF/PDF
-		  //glm::vec3 BRDF = inter.diffuse_col /** n_dot_l*/; // Divided by PI
-		  float PDF = 0.5f; // Divided by PI
-		  glm::vec3 direct_light = BRDF;
+		  float PDF = pdf_lambert(); // Divided by PI
+		  glm::vec3 direct_light = BRDF / PDF;
 
 		  thoughput *= direct_light;
+
+		  //acc = glm::vec3(glm::mix(inter.diffuse_col[0], inter.specular_col, 0.4));
 		  //acc += thoughput;// *sample_lights(r, scene, PDF, inter);
 
-		  //if (is_static)
 		  /*if (is_static)
 			acc += thoughput * sample_lights(r, scene, PDF, inter);*/
-		  //thoughput *= max(0.0, glm::dot(r.dir, oriented_normal));
 
 		  // Russian roulette
 		  float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));

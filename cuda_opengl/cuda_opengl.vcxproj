@@ -13,11 +13,13 @@
   <ItemGroup>
     <ClInclude Include="3rd_party\glad\glad.h" />
     <ClInclude Include="3rd_party\KHR\khrplatform.h" />
+    <ClInclude Include="src\brdf.cuh" />
     <ClInclude Include="src\driver\cuda_helper.h" />
     <ClInclude Include="src\driver\gpu_info.h" />
     <ClInclude Include="src\driver\interop.h" />
     <ClInclude Include="src\cpu_processor.h" />
     <ClInclude Include="src\gpu_processor.h" />
+    <ClInclude Include="src\post_process.cuh" />
     <ClInclude Include="src\raytrace.h" />
     <ClInclude Include="src\scene.h" />
     <ClInclude Include="src\scene_data.h" />
