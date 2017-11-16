@@ -143,7 +143,7 @@ namespace scene
       cudaThrowError();
     }
 
-    void upload_attribute(const std::vector<Real> &attribute,
+    /*void upload_attribute(const std::vector<Real> &attribute,
       struct Buffer<Real>& out_buffer)
     {
       size_t nb_bytes = attribute.size() * sizeof(Real);
@@ -154,7 +154,7 @@ namespace scene
       cudaThrowError();
       cudaMemcpy(out_buffer.data, &attribute[0], nb_bytes,
         cudaMemcpyHostToDevice);
-    }
+    }*/
 
     /// <summary>
     /// Uploads every materials.
@@ -207,7 +207,8 @@ namespace scene
       scene->textures.size = cpu_mat.size();
     }
 
-    void upload_meshes(const ShapeVector &shapes, Buffer<Mesh> &out_meshes)
+    void upload_meshes(const ShapeVector &shapes,
+      const tinyobj::attrib_t &attrib, Buffer<Mesh> &out_meshes)
     {
       /// The Mesh structure looks like:
       /// {
@@ -216,47 +217,82 @@ namespace scene
       ///    int *material_ids;
       /// }
       /// `indices' and `material_idx' should also be allocated.
-
       size_t nb_meshes = shapes.size();
-      size_t nb_bytes = nb_meshes * sizeof (Mesh);
-      Mesh *tmp_meshes = new Mesh[nb_meshes];
+
+      // Contains inner pointers allocated on the GPU.
+      std::vector<Mesh> gpu_meshes(nb_meshes);
 
       for (size_t i = 0; i < nb_meshes; ++i)
       {
         auto& mesh = shapes[i].mesh;
-
         auto nb_indices = mesh.indices.size();
-        auto nb_mat = mesh.material_ids.size();
-        auto nb_bytes_indices = nb_indices * sizeof(tinyobj::index_t);
-        auto nb_bytes_materials = nb_mat * sizeof(int);
 
-        Mesh &tmp_mesh = tmp_meshes[i];
-        tmp_mesh.indices.size = nb_indices;
-        tmp_mesh.material_ids.size = nb_mat;
+        size_t nb_faces = nb_indices / 3;
 
-        cudaMalloc(&(tmp_mesh.indices.data), nb_bytes_indices);
+        Mesh &gpu_mesh = gpu_meshes[i];
+        gpu_mesh.faces.size = nb_faces;
+
+        // Creates the faces on the CPU. This is really gross regarding memory
+        // consumption, but this will really speed up the intersection process
+        // thanks to a better cache efficiency.
+        std::vector<Face> faces(nb_faces);
+        for (size_t i = 0; i < nb_indices; i += 3)
+        {
+          auto& face = faces[i / 3];
+          for (size_t v = 0; v < 3; ++v)
+          {
+            tinyobj::index_t idx = mesh.indices[i + v];
+            // Saves vertex
+            face.vertices[v] = glm::vec3(
+              attrib.vertices[3 * idx.vertex_index],
+              attrib.vertices[3 * idx.vertex_index + 1],
+              attrib.vertices[3 * idx.vertex_index + 2]
+            );
+            // Saves normal
+            face.normals[v] = glm::vec3(
+              attrib.normals[3 * idx.normal_index],
+              attrib.normals[3 * idx.normal_index + 1],
+              attrib.normals[3 * idx.normal_index + 2]
+            );
+            // Saves normal
+            face.texcoords[v] = glm::vec2(
+              attrib.texcoords[2 * idx.texcoord_index],
+              attrib.texcoords[2 * idx.texcoord_index + 1]
+            );
+          }
+          face.material_id = mesh.material_ids[i / 3];
+
+          // Computes a unique tangent for the whole face
+          glm::vec3 edge1 = face.vertices[1] - face.vertices[0];
+          glm::vec3 edge2 = face.vertices[2] - face.vertices[0];
+          glm::vec2 delta_uv1 = face.texcoords[1] - face.texcoords[0];
+          glm::vec2 delta_uv2 = face.texcoords[2] - face.texcoords[0];
+
+          float f = 1.0f / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
+
+          face.tangent.x = f * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x);
+          face.tangent.y = f * (delta_uv2.y * edge1.y - delta_uv1.y * edge2.y);
+          face.tangent.z = f * (delta_uv2.y * edge1.z - delta_uv1.y * edge2.z);
+        }
+
+        if (faces.size() == 0) continue;
+
+        // Uploads faces to the GPU
+        size_t nb_byte_faces = gpu_mesh.faces.size * sizeof(Face);
+        cudaMalloc(&gpu_mesh.faces.data, nb_byte_faces);
         cudaThrowError();
-        cudaMalloc(&(tmp_mesh.material_ids.data), nb_bytes_materials);
-        cudaThrowError();
-
-        // Copies `indices' to the Mesh struct
-        cudaMemcpy(tmp_mesh.indices.data, &mesh.indices[0], nb_bytes_indices,
+        cudaMemcpy(gpu_mesh.faces.data, &faces[0], nb_byte_faces,
           cudaMemcpyHostToDevice);
-        cudaThrowError();
-        // Copies `material_ids'
-        cudaMemcpy(tmp_mesh.material_ids.data, &mesh.material_ids[0],
-          nb_bytes_materials, cudaMemcpyHostToDevice);
         cudaThrowError();
       }
 
+      size_t nb_byte_meshes = nb_meshes * sizeof(Mesh);
       out_meshes.size = nb_meshes;
-      cudaMalloc(&out_meshes.data, nb_bytes);
+      cudaMalloc(&out_meshes.data, nb_byte_meshes);
       cudaThrowError();
-      cudaMemcpy(out_meshes.data, tmp_meshes, nb_bytes,
+      cudaMemcpy(out_meshes.data, &gpu_meshes[0], nb_byte_meshes,
         cudaMemcpyHostToDevice);
       cudaThrowError();
-
-      delete tmp_meshes;
     }
 
   }
@@ -347,12 +383,8 @@ namespace scene
     // SceneData struct.
     // Takes also care of making cudaMemcpy of the data.
     //
-    upload_attribute(attrib.vertices, _scene_data->vertices);
-    upload_attribute(attrib.normals, _scene_data->normals);
-    upload_attribute(attrib.texcoords, _scene_data->texcoords);
-    upload_attribute(attrib.tangents, _scene_data->tangent);
     upload_materials(materials, _scene_data, base_folder);
-    upload_meshes(shapes, _scene_data->meshes);
+    upload_meshes(shapes, attrib, _scene_data->meshes);
 
     // Now the sceneData struct contains pointers to memory adresses
     // mapped by the GPU, we can send the whole struct to the GPU.
@@ -374,8 +406,6 @@ namespace scene
     cudaMemcpy(textures, _scene_data->textures.data,
       nb_tex * sizeof(scene::Texture), cudaMemcpyDeviceToHost);
     cudaError_t e = cudaGetLastError();
-    //std::string toto = cudaGetErrorString(e);
-     //std::cout << toto << std::endl;
 
     for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
     delete textures;
@@ -392,19 +422,10 @@ namespace scene
     for (size_t i = 0; i < nb_meshes; ++i)
     {
       const Mesh& mesh = meshes[i];
-      cudaFree(mesh.indices.data);
-      cudaFree(mesh.material_ids.data);
+      cudaFree(mesh.faces.data);
     }
     delete meshes;
 
-    // Frees vertices
-    cudaFree(_scene_data->vertices.data);
-    // Frees normals
-    cudaFree(_scene_data->normals.data);
-    // Frees texcoords
-    cudaFree(_scene_data->texcoords.data);
-    // Frees tangents
-    cudaFree(_scene_data->tangent.data);
     // Frees materials
     cudaFree(_scene_data->materials.data);
     // Frees lights

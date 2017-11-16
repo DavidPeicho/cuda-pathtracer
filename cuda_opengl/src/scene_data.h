@@ -20,19 +20,23 @@ namespace scene
     float *data;
   };
 
+  struct Face
+  {
+    glm::vec3 vertices[3];
+    glm::vec3 normals[3];
+    glm::vec2 texcoords[3];
+    glm::vec3 tangent;
+    int material_id;
+  };
+
   struct Mesh
   {
-    struct Buffer<tinyobj::index_t> indices;
-    struct Buffer<int> material_ids;
+    struct Buffer<Face> faces;
   };
 
   struct SceneData
   {
-    struct Buffer<struct Mesh> meshes;
-    struct Buffer<tinyobj::real_t> vertices;
-    struct Buffer<tinyobj::real_t> normals;
-    struct Buffer<tinyobj::real_t> texcoords;
-    struct Buffer<tinyobj::real_t> tangent;
+    struct Buffer<Mesh> meshes;
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
     struct Buffer<struct Texture> textures;

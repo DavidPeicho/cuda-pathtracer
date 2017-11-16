@@ -108,6 +108,9 @@ main(int argc, char* argv[])
 
   // Parses selected scene using TinyObjLoader.
   scene::Scene scene("assets/crate_land.scene");
+  //scene::Scene scene("assets/floor_normal.scene");
+  //scene::Scene scene("assets/floor_normal_rotated.scene");
+  //scene::Scene scene("assets/cornell.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
   processor::GPUProcessor processor(scene, window_w, window_h);
