@@ -1787,7 +1787,8 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
     thing would be to fork tinyobjloader and to add tangent
     calculation *without* using glm. This is a TODO!
   */
-  for (size_t i = 0; i < shapes->size(); ++i)
+
+  /*for (size_t i = 0; i < shapes->size(); ++i)
   {
     size_t index_offset = 0;
     mesh_t &mesh = (*shapes)[i].mesh;
@@ -1810,27 +1811,20 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
         uvs[v].y = attrib->texcoords[2 * idx.texcoord_index + 1];
       }
 
-      glm::vec3 edge1 = vertices[1] - vertices[0];
-      glm::vec3 edge2 = vertices[2] - vertices[0];
-      glm::vec2 delta_uv1 = uvs[1] - uvs[0];
-      glm::vec2 delta_uv2 = uvs[2] - uvs[0];
 
-      float f = 1.0f / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
-      glm::vec3 tangent;
-      tangent.x = f * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x);
-      tangent.y = f * (delta_uv2.y * edge1.y - delta_uv1.y * edge2.y);
-      tangent.z = f * (delta_uv2.y * edge1.z - delta_uv1.y * edge2.z);
-      tangent = glm::normalize(tangent);
 
-      mesh.indices[index_offset + 0].tangent = attrib->texcoords.size();
-      mesh.indices[index_offset + 1].tangent = attrib->texcoords.size();
-      mesh.indices[index_offset + 2].tangent = attrib->texcoords.size();
+      auto s = attrib->tangents.size() / 3;
+      mesh.indices[index_offset + 0].tangent = s;
+      mesh.indices[index_offset + 1].tangent = s;
+      mesh.indices[index_offset + 2].tangent = s;
 
       attrib->tangents.push_back(tangent.x);
       attrib->tangents.push_back(tangent.y);
       attrib->tangents.push_back(tangent.z);
+
+      index_offset += 3;
     }
-  }
+  }*/
 
   return true;
 }

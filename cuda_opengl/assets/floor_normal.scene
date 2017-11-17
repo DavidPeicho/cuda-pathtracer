@@ -1,6 +1,6 @@
 camera 0.0 1.0 4.0 1.0 0.0 0.0 0.0 -1.0 0.0 90.0
 
 # pos_x pos_y pos_z r g b emission radius
-p_light -0.5 1.0 0.0 1.0 1.0 1.0 10.0 0.5
+p_light 0.5 1.5 0.0 1.0 1.0 1.0 1.0 0.5
 
-scene obj/crate_land.obj
+scene obj/floor_normal.obj

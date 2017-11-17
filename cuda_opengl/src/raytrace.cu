@@ -41,7 +41,6 @@ struct IntersectionData
   glm::vec3 normal;
   glm::vec3 surface_normal;
   glm::vec3 tangent;
-  glm::mat3 tbn;
   glm::vec3 diffuse_col;
   glm::vec2 uv;
   const scene::LightProp *light;
@@ -62,7 +61,7 @@ getTextureIdx(const scene::Texture &texture, const glm::vec2& uv)
   return (y * texture.w + x) * texture.nb_chan;
 }
 
-__device__ void
+__device__ inline void
 sampleTexture(const scene::Buffer<scene::Texture>& textures,
   int tex_id, const glm::vec2& uv, glm::vec3& out)
 {
@@ -93,19 +92,18 @@ generateRay(const int x, const int y,
 }
 
 __device__ inline bool
-intersectTriangle(const glm::vec3 *vert, const glm::vec3 *v_norm,
-  const glm::vec2 *v_uv, glm::vec3 &out_normal, glm::vec2 &out_uv,
-  const scene::Ray &ray, float& t)
+intersectTriangle(const scene::Face &face, glm::vec3 &out_normal,
+  glm::vec2 &out_uv, const scene::Ray &ray, float& t)
 {
-	glm::vec3 v0v1 = vert[1] - vert[0];
-	glm::vec3 v0v2 = vert[2] - vert[0];
+	glm::vec3 v0v1 = face.vertices[1] - face.vertices[0];
+	glm::vec3 v0v2 = face.vertices[2] - face.vertices[0];
 	glm::vec3 p_vec = glm::cross(ray.dir, v0v2);
 	float det = glm::dot(v0v1, p_vec);
 	if (det < 0.0000001)
 		return false;
 
 	float inv_det = __fdividef(1.f, det);
-	glm::vec3 t_vec = ray.origin - vert[0];
+	glm::vec3 t_vec = ray.origin - face.vertices[0];
 	float u = glm::dot(t_vec, p_vec) * inv_det;
 	if (u < 0 || u > 1) return false;
 
@@ -115,9 +113,9 @@ intersectTriangle(const glm::vec3 *vert, const glm::vec3 *v_norm,
 
   // Interpolates normals
   //out_normal = (1.0f - u - v) * v_norm[0] + u * v_norm[1] + v * v_norm[2];
-  out_normal = v_norm[0];
+  out_normal = face.normals[0];
   // Interpolates uvs
-  out_uv = (1.0f - u - v) * v_uv[0] + u * v_uv[1] + v * v_uv[2];
+  out_uv = (1.0f - u - v) * face.texcoords[0] + u * face.texcoords[1] + v * face.texcoords[2];
   out_uv = glm::mod(out_uv, 1.0f); // UVs should be in [0.0, 1.0]
 
 	t = glm::dot(v0v2, qvec) * inv_det;
@@ -148,10 +146,6 @@ intersect(const scene::Ray& r,
   float inter_dist = MAX_DIST;
   intersection.dist = MAX_DIST;
 
-	glm::vec3 vertex[3];
-  glm::vec3 v_normal[3];
-  glm::vec2 v_uv[3];
-
   glm::vec3 normal;
   glm::vec2 uv;
 
@@ -160,40 +154,24 @@ intersect(const scene::Ray& r,
   // Checks meshes intersection
 	for (size_t m = 0; m < scene->meshes.size; ++m)
 	{
-		const scene::Mesh &mesh = scene->meshes.data[m];
-		for (size_t i = 0; i < mesh.indices.size; i += 3)
-		{
-			for (size_t v = 0; v < 3; ++v)
-			{
-				tinyobj::index_t idx = mesh.indices.data[i + v];
-				vertex[v].x = scene->vertices.data[3 * idx.vertex_index];
-				vertex[v].y = scene->vertices.data[3 * idx.vertex_index + 1];
-				vertex[v].z = scene->vertices.data[3 * idx.vertex_index + 2];
-        v_normal[v].x = scene->normals.data[3 * idx.normal_index];
-        v_normal[v].y = scene->normals.data[3 * idx.normal_index + 1];
-        v_normal[v].z = scene->normals.data[3 * idx.normal_index + 2];
-        v_uv[v].x = scene->texcoords.data[2 * idx.texcoord_index];
-        v_uv[v].y = scene->texcoords.data[2 * idx.texcoord_index + 1];
-			}
-			if (intersectTriangle(vertex, v_normal, v_uv, normal, uv, r, inter_dist)
-          && inter_dist < intersection.dist && inter_dist > 0.0)
-			{
-        tinyobj::index_t idx = mesh.indices.data[i];
-
-        inter_mat = &scene->materials.data[mesh.material_ids.data[i / 3]];
+		const auto &mesh = scene->meshes.data[m];
+    for (size_t i = 0; i < mesh.faces.size; ++i)
+    {
+      const auto &face = mesh.faces.data[i];
+      if (intersectTriangle(face, normal, uv, r, inter_dist)
+        && inter_dist < intersection.dist && inter_dist > 0.0)
+      {
+        inter_mat = &scene->materials.data[face.material_id];
         intersection.normal = normal;
         intersection.surface_normal = normal;
-
-        intersection.tangent.x = scene->tangent.data[3 * idx.tangent];
-        intersection.tangent.y = scene->tangent.data[3 * idx.tangent + 1];
-        intersection.tangent.z = scene->tangent.data[3 * idx.tangent + 2];
+        intersection.tangent = face.tangent;
 
         intersection.uv = uv;
         intersection.dist = inter_dist;
         intersection.is_light = false;
         intersection.light = NULL;
-			}
-		}
+      }
+    }
 	}
 
   // At least one intersection has been found.
@@ -209,7 +187,7 @@ intersect(const scene::Ray& r,
       intersection.dist = inter_dist;
       intersection.diffuse_col = glm::vec3(light.color[0], light.color[1], light.color[2]);
       intersection.normal = glm::normalize(light.vec - (inter_dist * r.dir));
-      intersection.surface_normal = glm::normalize(light.vec - (inter_dist * r.dir));
+      intersection.surface_normal = intersection.normal;
       inter_mat = nullptr;
     }
   }
@@ -220,17 +198,22 @@ intersect(const scene::Ray& r,
   {
     // Fetches diffuse color from texture
     sampleTexture(scene->textures, inter_mat->diffuse_spec_map, intersection.uv, intersection.diffuse_col);
-    glm::vec3 binormal = glm::cross(intersection.normal, intersection.tangent);
-    intersection.tbn[0] = intersection.tangent;
-    intersection.tbn[1] = binormal;
-    intersection.tbn[2] = intersection.normal;
-    intersection.tbn = glm::transpose(intersection.tbn);
 
     // Computes normal perturbated by normal map
     if (inter_mat->normal_map >= 0)
     {
-      sampleTexture(scene->textures, inter_mat->normal_map, intersection.uv, intersection.normal);
-      intersection.normal = glm::normalize(intersection.normal * 2.0f - 1.0f);
+      glm::vec3 normal;
+      sampleTexture(scene->textures, inter_mat->normal_map, intersection.uv, normal);
+      intersection.normal = glm::normalize(normal * 2.0f - 1.0f);
+
+      glm::vec3 binormal = glm::normalize(glm::cross(intersection.tangent, intersection.surface_normal));
+
+      glm::mat3 tbn;
+      tbn[0] = intersection.tangent;
+      tbn[1] = -binormal;
+      tbn[2] = intersection.surface_normal;
+
+      intersection.normal = tbn * intersection.normal;
     }
   }
 
@@ -263,10 +246,9 @@ sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
 
 			if (l.vec == inter.light->vec)
 				continue;
-		
-			glm::vec3 tangent_light_dir = in.tbn * light_dir;
 
-			float n_dot_l = glm::dot(in.normal, tangent_light_dir);
+
+			float n_dot_l = glm::dot(in.normal, light_dir);
 			L += inter.diffuse_col * n_dot_l * l.emission / PDF;
 		}
 	}
@@ -286,7 +268,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  const int max_bounces = 1 + is_static * (static_samples + 1);
+  //const int max_bounces = 1 + is_static * (static_samples + 1);
+  const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  glm::vec3 oriented_normal;
@@ -295,22 +278,18 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 	  {
 		  float cos_theta = glm::dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+		  oriented_normal = inter.normal;
 
 		  float r1 = curand_uniform(rand_state);
 
 		  glm::vec3 BRDF;
 
-		  // Oren-Nayar diffuse
-		  //glm::vec3 light_dir = inter.light->vec - r.origin;
-		  //float n_dot_l = glm::dot(oriented_normal, light_dir);
-		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col
-		  /*
-		  {
-			  //Specular model (Snell's law)
-			  glm::vec3 d = glm::reflect(r.dir, oriented_normal);
+		  glm::vec3 up = glm::vec3(0.0, 1.0, 0.0);
+		  glm::vec3 right = glm::cross(up, inter.normal);
+		  up = glm::cross(inter.normal, right);
 
-			  BRDF = glm::vec3(inter.diffuse_col) / 0.4f;
-		  }*/
+		  // Oren-Nayar diffuse
+		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
 
 		  if (inter.is_light)
 		  {
@@ -338,6 +317,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  //Diffuse hemishphere reflection
 		  d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
+
 		  r.origin += r.dir * inter.dist;
 
 		  r.origin += oriented_normal * 0.03f;
@@ -391,7 +371,7 @@ kernel(const unsigned int width, const unsigned int height,
 	curand_init(hash_seed + tid, 0, 0, &rand_state);
 
 	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
-	
+
 	//Focus dist
 	/*glm::vec3 focalPoint = 2.f * r.dir;
 	float randomAngle = curand_uniform(&rand_state) * 2.0f * M_PI;
@@ -399,7 +379,7 @@ kernel(const unsigned int width, const unsigned int height,
 	glm::vec3  randomAperturePos = ( cos(randomAngle) * cam.u + sin(randomAngle) * cam.v ) * randomRadius;
 	// point on aperture to focal point
 	glm::vec3 finalRayDir = normalize(focalPoint - randomAperturePos);
-	
+
 	r.origin += randomAperturePos;
 	r.dir = finalRayDir;*/
 
