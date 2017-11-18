@@ -20,6 +20,9 @@
 #include "post_process.cuh"
 
 surface<void, cudaSurfaceType2D> surf;
+//texture<float, cudaTextureTypeCubemap> cubemap_ref;
+//texture<uint4, cudaTextureTypeCubemap> cubemap_ref;
+texture<float4, cudaTextureTypeCubemap> cubemap_ref;
 
 union rgba_24
 {
@@ -262,7 +265,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 {
   glm::vec3 acc = glm::vec3(0.0f);
   // For energy compensation on Russian roulette
-  glm::vec3 thoughput = glm::vec3(1.0f);
+  glm::vec3 throughput = glm::vec3(1.0f);
 
   // Contains information about each intersection.
   // This will be updated at each call to 'intersect'.
@@ -274,13 +277,13 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   {
 	  glm::vec3 oriented_normal;
 
+	  float r1 = curand_uniform(rand_state);// *inter.specular_col;
+
 	  if (intersect(r, scene, inter))
 	  {
 		  float cos_theta = glm::dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 		  oriented_normal = inter.normal;
-
-		  float r1 = curand_uniform(rand_state);// *inter.specular_col;
 
 		  glm::vec3 BRDF;
 
@@ -294,17 +297,17 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  if (inter.is_light)
 		  {
-			  acc += inter.light->emission * thoughput;
+			  acc += inter.light->emission * throughput;
 
-			  float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+			  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
 			  if (r1 > p && b > 1)
 				  return acc;
 
-			  thoughput *= 1.0 / p;
+			  throughput *= 1.0 / p;
 
 			  BRDF = glm::vec3(inter.light->color[0], inter.light->color[1], inter.light->color[2]);
 		  }
-		  
+
 		  glm::vec3 d;
 		  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
 
@@ -322,14 +325,14 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  r.origin += r.dir * inter.dist;
 
-		  r.dir = glm::mix(d, spec, 0.2f);
+		  r.dir = glm::mix(spec, d, inter.specular_col);
 		  r.origin += r.dir * 0.03f;
 
 		  //Lambert BRDF/PDF
 		  float PDF = pdf_lambert(); // Divided by PI
 		  glm::vec3 direct_light = BRDF / PDF;
 
-		  thoughput *= direct_light;
+		  throughput *= direct_light;
 
 		  //acc = glm::vec3(glm::mix(inter.diffuse_col[0], inter.specular_col, 0.4));
 		  //acc += thoughput;// *sample_lights(r, scene, PDF, inter);
@@ -338,14 +341,23 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			acc += thoughput * sample_lights(r, scene, PDF, inter);*/
 
 		  // Russian roulette
-		  float p = fmaxf(thoughput.x, fmaxf(thoughput.y, thoughput.z));
+		  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
 		  if (r1 > p && b > 1)
 			  return acc;
 
-		  thoughput *= 1.0 / p;
+		  throughput *= 1.0 / p;
 	  }
 	  else
-		  return glm::vec3(0.0f);
+	  {
+		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
+		  acc += glm::vec3(val.x, val.y, val.z) * throughput;
+
+		  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
+		  if (r1 > p && b > 1)
+			  return acc;
+
+		  throughput *= 1.0 / p;
+	  }
   }
 
   return acc;
@@ -428,7 +440,8 @@ inline unsigned int WangHash(unsigned int a)
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const scene::Camera * const cam,
+raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
+  const scene::SceneData *const gpu_scene, const scene::Camera * const cam,
 	const unsigned int width, const unsigned int height, cudaStream_t stream,
 	glm::vec3 *temporal_framebuffer, bool moved)
 {
@@ -441,6 +454,12 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const sce
 
 	cudaBindSurfaceToArray(surf, array);
 
+  cubemap_ref.addressMode[0] = cudaAddressModeWrap;
+  cubemap_ref.addressMode[1] = cudaAddressModeWrap;
+  cubemap_ref.filterMode = cudaFilterModeLinear;
+  cubemap_ref.normalized = true;
+  cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);
+
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32
 	// Block size occupancy
@@ -451,7 +470,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const sce
 	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
-		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scene, *cam,
+		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, gpu_scene, *cam,
       WangHash(seed), seed, temporal_framebuffer, moved);
 
 	return cudaSuccess;

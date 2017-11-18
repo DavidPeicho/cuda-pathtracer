@@ -14,14 +14,18 @@
 #include <sstream>
 #include <string>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include <unordered_map>
 
 #include "driver/cuda_helper.h"
-
 #include "material_loader.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "scene.h"
+
+#include "texture_utils.h"
 
 namespace scene
 {
@@ -30,6 +34,44 @@ namespace scene
     using ShapeVector = std::vector<tinyobj::shape_t>;
     using MaterialVector = std::vector<tinyobj::material_t>;
     using Real = tinyobj::real_t;
+
+    /// <summary>
+    /// Checks whether a string is an hexadecimal number of not.
+    /// </summary>
+    /// <param name="s">String to check</param>
+    /// <returns>
+    ///   <c>true</c> if the specified string is hexa; otherwise, <c>false</c>.
+    /// </returns>
+    bool isHexa(const std::string& s)
+    {
+      return s.compare(0, 2, "0x") == 0
+        && s.size() > 2
+        && s.find_first_not_of("0123456789abcdefABCDEF", 2) == std::string::npos;
+    }
+
+    float *createUnitTexture(unsigned int nb_chan, unsigned int color,
+      unsigned int nb_faces)
+    {
+      static const unsigned int DEFAULT_SIZE = 1;
+
+      float r = ((color >> 16) & 0xFF) / 255.0f;
+      float g = ((color >> 8) & 0xFF) / 255.0f;
+      float b = (color & 0xFF) / 255.0f;
+
+      unsigned int nb_elt = DEFAULT_SIZE * DEFAULT_SIZE * nb_chan;
+      float *img = new float[nb_elt * nb_faces];
+      for (unsigned int n = 0; n < nb_faces; ++n)
+      {
+        for (unsigned int i = 0; i < nb_elt; i += nb_chan)
+        {
+          img[n * nb_elt + i] = r;
+          img[n * nb_elt + i + 1] = g;
+          img[n * nb_elt + i + 2] = b;
+          img[n * nb_elt + i + 3] = 0.0;
+        }
+      }
+      return img;
+    }
 
     bool parse_double3(glm::vec3 &out, std::stringstream& iss)
     {
@@ -81,12 +123,18 @@ namespace scene
     }
 
     void parse_scene(std::string filename, scene::SceneData &out_scene,
-      scene::Camera &cam, std::string& objfile)
+      scene::Camera &cam, std::string& objfile, std::string& cubemapfile)
     {
       std::ifstream file;
       file.open(filename);
       if (!file.is_open())
-        throw std::runtime_error("parse_scene(): failed to open '" + filename + "'");;
+        throw std::runtime_error("parse_scene(): failed to open '" + filename + "'");
+
+      // Creates default camera, used when no camera is found in the .scene file
+      cam.u = glm::vec3(1.0, 0.0, 0.0);
+      cam.v = glm::vec3(0.0, -1.0, 0.0);
+      cam.fov_x = (90.0 * M_PI) / 180.0;
+      cam.dir = glm::cross(cam.u, cam.v);
 
       // Contains every lights. Because we do not use vector
       // on CUDA, we will need to make a deep copy of it.
@@ -116,6 +164,12 @@ namespace scene
           iss >> plight.radius;
           light_vec.push_back(plight);
         }
+        else if (token == "cubemap")
+        {
+          if (iss.peek() == std::char_traits<char>::eof())
+            throw std::runtime_error("parse_scene(): error parsing cubemap file name.");
+          iss >> cubemapfile;
+        }
         else if (token == "scene")
         {
           if (iss.peek() == std::char_traits<char>::eof())
@@ -142,19 +196,6 @@ namespace scene
          cudaMemcpyHostToDevice);
       cudaThrowError();
     }
-
-    /*void upload_attribute(const std::vector<Real> &attribute,
-      struct Buffer<Real>& out_buffer)
-    {
-      size_t nb_bytes = attribute.size() * sizeof(Real);
-
-      out_buffer.size = attribute.size();
-
-      cudaMalloc(&out_buffer.data, nb_bytes);
-      cudaThrowError();
-      cudaMemcpy(out_buffer.data, &attribute[0], nb_bytes,
-        cudaMemcpyHostToDevice);
-    }*/
 
     /// <summary>
     /// Uploads every materials.
@@ -295,6 +336,125 @@ namespace scene
       cudaThrowError();
     }
 
+    void upload_cubemap(const std::string &path, SceneData *out_scene)
+    {
+      static const unsigned int NB_COMP = 4;
+      static const unsigned int NB_FACES = 6;
+      static const unsigned int DEFAULT_COLOR = 0x05070A;
+
+      // This pointer will contain the image data, either loaded
+      // on the disk, or created by using a constant color.
+      float *img = nullptr;
+      unsigned int size = 1;
+
+      // This is used to free the pointer correctly,
+      // using either the delete operator, or the
+      // stbi_image_free call.
+      float *loaded = nullptr;
+
+      // No cubemap was provided with the scene, we will
+      // either use a given hexadecimal color, or use the default color.
+      if (path.empty() || isHexa(path))
+      {
+        img = createUnitTexture(
+          NB_COMP,
+          path.empty() ? DEFAULT_COLOR : strtol(path.c_str(), NULL, 16),
+          NB_FACES
+        );
+      }
+      // A path to a cubemap has been provided, we load it and extract
+      // each face from the cubecross.
+      else
+      {
+        std::string error;
+        int w, h, nb_chan;
+        loaded = stbi_loadf(path.c_str(), &w, &h, &nb_chan, STBI_default);
+
+        size = w / 4;
+
+        // An internal error occured in stbi_loadf.
+        if (!loaded)
+          error = "unknown error " + path;
+        // Width and height are not the same, the cubecross can not be valid.
+        else if (size != h / 3)
+          error = "width and height are not the same";
+        // NPOT.
+        else if (size & (size - 1))
+          error = "size should be a power of 2";
+
+        // No error has occured when loading the cubemap, we
+        // can upload it safely.
+        if (error.empty())
+        {
+          // CUDA cubemap textures expect the data to lay out as follows:
+          // +x / -x / +y / -y / +z / -z
+          img = new float[size * size * NB_COMP * NB_FACES];
+          // Sends +/- X faces
+          float *tmp = texture::append_cube_faces(
+            img, loaded, w, 0, nb_chan, NB_COMP, true, true
+          );
+          // Sends +/- Y faces
+          tmp = texture::append_cube_faces(
+            tmp, loaded, w, 1, nb_chan, NB_COMP, false, false
+          );
+          // Sends +/- Z faces
+          texture::append_cube_faces(
+            tmp, loaded, w, 1, nb_chan, NB_COMP, true, false
+          );
+        }
+        else
+        {
+          std::cerr << "arttracer: cubemap loading fail: " << error << std::endl;
+          img = createUnitTexture(NB_COMP, DEFAULT_COLOR, NB_FACES);
+        }
+
+        //fail to load cubemap :
+      }
+      /*float *tmp = new float[6 * 2 * 2 * 4];
+      size_t nb_bytes = 2 * 2 * 4;
+      for (size_t i = 0; i < nb_bytes; i += 4)
+      {
+        tmp[0 * nb_bytes + i] = 1.0;
+        tmp[0 * nb_bytes + i + 1] = 0;
+        tmp[0 * nb_bytes + i + 2] = 0;
+      }
+      // FACE 2 +y
+      for (size_t i = 0; i < nb_bytes; i += 4)
+      {
+        tmp[2 * nb_bytes + i] = 0;
+        tmp[2 * nb_bytes + i + 1] = 1.0;
+        tmp[2 * nb_bytes + i + 2] = 0;
+      }
+      // FACE 4 +z
+      for (size_t i = 0; i < nb_bytes; i += 4)
+      {
+        tmp[4 * nb_bytes + i] = 0;
+        tmp[4 * nb_bytes + i + 1] = 0;
+        tmp[4 * nb_bytes + i + 2] = 1.0;
+      }*/
+      // END DEBUG
+
+      out_scene->cubemap_desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+      cudaThrowError();
+
+      cudaMalloc3DArray(&out_scene->cubemap, &out_scene->cubemap_desc,
+        make_cudaExtent(size, size, NB_FACES), cudaArrayCubemap);
+      cudaThrowError();
+
+      cudaMemcpy3DParms myparms = { 0 };
+      myparms.srcPos = make_cudaPos(0, 0, 0);
+      myparms.dstPos = make_cudaPos(0, 0, 0);
+      myparms.srcPtr = make_cudaPitchedPtr(img, size * sizeof(float) * NB_COMP, size, size);
+      myparms.dstArray = out_scene->cubemap;
+      myparms.extent = make_cudaExtent(size, size, NB_FACES);
+      myparms.kind = cudaMemcpyHostToDevice;
+      cudaMemcpy3D(&myparms);
+      cudaThrowError();
+
+      delete img;
+      if (loaded) stbi_image_free(loaded);
+    }
+
   }
 
   Scene::Scene(const std::string& filepath)
@@ -327,11 +487,12 @@ namespace scene
     _camera = new Camera;
 
     std::string objfilepath;
+    std::string cubemap_path;
     std::string base_dir = "";
     std::string mtl_dir = "";
     std::string full_obj_path = "";
 
-    parse_scene(_filepath, *_scene_data, *_camera, objfilepath);
+    parse_scene(_filepath, *_scene_data, *_camera, objfilepath, cubemap_path);
 
     std::string::size_type pos = _filepath.find_last_of('/');
     if (pos != std::string::npos)
@@ -339,6 +500,8 @@ namespace scene
       base_dir = _filepath.substr(0, pos) + "/";
       mtl_dir = base_dir;
       full_obj_path = base_dir + objfilepath;
+      if (!cubemap_path.empty() && !isHexa(cubemap_path))
+        cubemap_path = base_dir + cubemap_path;
     }
 
     // Extracts basedir to find MTL if any.
@@ -358,7 +521,7 @@ namespace scene
       return;
     }
 
-    upload_gpu(shapes, materials, attrib, mtl_dir);
+    upload_gpu(shapes, materials, attrib, cubemap_path, mtl_dir);
     _uploaded = true;
   }
 
@@ -376,6 +539,7 @@ namespace scene
   Scene::upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
     const std::vector<tinyobj::material_t>& materials,
     const tinyobj::attrib_t attrib,
+    const std::string& cubemap_path,
     const std::string& base_folder)
   {
     //
@@ -385,6 +549,7 @@ namespace scene
     //
     upload_materials(materials, _scene_data, base_folder);
     upload_meshes(shapes, attrib, _scene_data->meshes);
+    upload_cubemap(cubemap_path, _scene_data);
 
     // Now the sceneData struct contains pointers to memory adresses
     // mapped by the GPU, we can send the whole struct to the GPU.
