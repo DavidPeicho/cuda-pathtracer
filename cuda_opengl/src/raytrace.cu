@@ -187,7 +187,7 @@ intersect(const scene::Ray& r,
       intersection.dist = inter_dist;
       intersection.diffuse_col = glm::vec3(light.color[0], light.color[1], light.color[2]);
       intersection.normal = glm::normalize(light.vec - (inter_dist * r.dir));
-      intersection.surface_normal = intersection.normal;
+      intersection.surface_normal = intersection.surface_normal;
       inter_mat = nullptr;
     }
   }
@@ -268,8 +268,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  //const int max_bounces = 1 + is_static * (static_samples + 1);
-  const int max_bounces = 1;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
+  //const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  glm::vec3 oriented_normal;
@@ -280,7 +280,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 		  oriented_normal = inter.normal;
 
-		  float r1 = curand_uniform(rand_state);
+		  float r1 = curand_uniform(rand_state);// *inter.specular_col;
 
 		  glm::vec3 BRDF;
 
@@ -290,6 +290,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  // Oren-Nayar diffuse
 		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
+		  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
 
 		  if (inter.is_light)
 		  {
@@ -303,11 +304,11 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 			  BRDF = glm::vec3(inter.light->color[0], inter.light->color[1], inter.light->color[2]);
 		  }
-		  else
-			  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
 		  
 		  glm::vec3 d;
-		  float phi = 2.0f * M_PI * curand_uniform(rand_state) * glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
+		  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
+
+		  //r1 *= inter.specular_col;
 
 		  float sin_t = sqrtf(r1);
 		  float cos_t = sqrt(1.f - r1);
@@ -316,12 +317,13 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  glm::vec3 v = glm::cross(oriented_normal, u);
 
 		  //Diffuse hemishphere reflection
+		  glm::vec3 spec = glm::reflect(r.dir, oriented_normal);
 		  d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
 
 		  r.origin += r.dir * inter.dist;
 
-		  r.origin += oriented_normal * 0.03f;
-		  r.dir = d;
+		  r.dir = glm::mix(d, spec, 0.2f);
+		  r.origin += r.dir * 0.03f;
 
 		  //Lambert BRDF/PDF
 		  float PDF = pdf_lambert(); // Divided by PI
@@ -372,12 +374,12 @@ kernel(const unsigned int width, const unsigned int height,
 
 	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
 
-	//Focus dist
-	/*glm::vec3 focalPoint = 2.f * r.dir;
+	/*//Focus dist
+	glm::vec3 focalPoint = 2.f * r.dir;
 	float randomAngle = curand_uniform(&rand_state) * 2.0f * M_PI;
-	float randomRadius = curand_uniform(&rand_state) * 0.5f;
+	float randomRadius = curand_uniform(&rand_state) * 0.125f;
 	glm::vec3  randomAperturePos = ( cos(randomAngle) * cam.u + sin(randomAngle) * cam.v ) * randomRadius;
-	// point on aperture to focal point
+	// Point on aperture to focal point
 	glm::vec3 finalRayDir = normalize(focalPoint - randomAperturePos);
 
 	r.origin += randomAperturePos;
