@@ -20,6 +20,9 @@
 #include "post_process.cuh"
 
 surface<void, cudaSurfaceType2D> surf;
+//texture<float, cudaTextureTypeCubemap> cubemap_ref;
+//texture<uint4, cudaTextureTypeCubemap> cubemap_ref;
+texture<float4, cudaTextureTypeCubemap> cubemap_ref;
 
 union rgba_24
 {
@@ -280,6 +283,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 		  oriented_normal = inter.normal;
 
+		  //acc += mask * emission * (float)light_emitter * intersection;
 		  float r1 = curand_uniform(rand_state);
 
 		  glm::vec3 BRDF;
@@ -305,7 +309,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  }
 		  else
 			  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
-		  
+
 		  glm::vec3 d;
 		  float phi = 2.0f * M_PI * curand_uniform(rand_state) * glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
 
@@ -342,8 +346,10 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  thoughput *= 1.0 / p;
 	  }
-	  else
-		  return glm::vec3(0.0f);
+    else {
+      auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, r.dir.z);
+      acc += glm::vec3(val.x, val.y, val.z);
+    }
   }
 
   return acc;
@@ -426,7 +432,8 @@ inline unsigned int WangHash(unsigned int a)
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const scene::Camera * const cam,
+raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
+  const scene::SceneData *const gpu_scene, const scene::Camera * const cam,
 	const unsigned int width, const unsigned int height, cudaStream_t stream,
 	glm::vec3 *temporal_framebuffer, bool moved)
 {
@@ -439,6 +446,12 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const sce
 
 	cudaBindSurfaceToArray(surf, array);
 
+  cubemap_ref.addressMode[0] = cudaAddressModeWrap;
+  cubemap_ref.addressMode[1] = cudaAddressModeWrap;
+  cubemap_ref.filterMode = cudaFilterModeLinear;
+  cubemap_ref.normalized = true;
+  cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);
+
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32
 	// Block size occupancy
@@ -449,7 +462,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const scene, const sce
 	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
-		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scene, *cam,
+		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, gpu_scene, *cam,
       WangHash(seed), seed, temporal_framebuffer, moved);
 
 	return cudaSuccess;

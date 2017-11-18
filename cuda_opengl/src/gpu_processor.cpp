@@ -54,7 +54,11 @@ namespace processor
 
     auto *cam = _scene.getCamPointer();
     cudaError_t cuda_err = _interop.map(_stream);
-    raytrace(_interop.getArray(), _scene.getUploadedScenePointer(), cam, _width,
+
+    const auto *cpu_scene = _scene.getScenePointer();
+    const auto *gpu_scene = _scene.getUploadedScenePointer();
+
+    raytrace(_interop.getArray(), cpu_scene, gpu_scene, cam, _width,
         _height, _stream, _d_temporal_framebuffer, _moved);
     cuda_err = _interop.unmap(_stream);
 

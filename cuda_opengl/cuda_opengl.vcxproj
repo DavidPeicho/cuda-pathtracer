@@ -24,6 +24,7 @@
     <ClInclude Include="src\scene.h" />
     <ClInclude Include="src\scene_data.h" />
     <ClInclude Include="src\material_loader.h" />
+    <ClInclude Include="src\texture_utils.h" />
     <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -35,6 +36,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\material_loader.cpp" />
     <ClCompile Include="src\scene.cpp" />
+    <ClCompile Include="src\texture_utils.cpp" />
     <ClCompile Include="src\utils.cpp" />
   </ItemGroup>
   <ItemGroup>

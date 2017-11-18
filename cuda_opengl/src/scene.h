@@ -61,6 +61,7 @@ namespace scene
       upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
         const std::vector<tinyobj::material_t>& materials,
         const tinyobj::attrib_t attrib,
+        const std::string& cubemap_path,
         const std::string& base_folder);
 
       void

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cuda_runtime.h>
+
 #include <glm/common.hpp>
 #include <tiny_obj_loader.h>
 
@@ -40,6 +42,8 @@ namespace scene
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
     struct Buffer<struct Texture> textures;
+    cudaArray *cubemap;
+    cudaChannelFormatDesc cubemap_desc;
   };
 
   struct Material
