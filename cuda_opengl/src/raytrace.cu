@@ -271,8 +271,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  //const int max_bounces = 1 + is_static * (static_samples + 1);
-  const int max_bounces = 1;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
+  //const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  glm::vec3 oriented_normal;
@@ -346,8 +346,9 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  thoughput *= 1.0 / p;
 	  }
-    else {
-      auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, r.dir.z);
+    else
+    {
+      auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, - r.dir.z);
       acc += glm::vec3(val.x, val.y, val.z);
     }
   }

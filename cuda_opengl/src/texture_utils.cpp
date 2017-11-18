@@ -31,19 +31,28 @@ namespace texture
   float *
   append_cube_faces(float *dst, const float *face, unsigned int width,
     unsigned int x_start, unsigned int in_nb_comp, unsigned int out_nb_comp,
-    bool horizontal)
+    bool horizontal, bool reverse_order)
   {
     unsigned int size = width / 4;
+
+    // X fetch for appending
     if (horizontal)
     {
-      dst = copy_face(dst, face, width, (x_start + 2) * size, size, in_nb_comp, out_nb_comp);
-      dst = copy_face(dst, face, width, 0, size, in_nb_comp, out_nb_comp);
+      unsigned diff = 2 * size;
+      unsigned x = x_start * size;
+      if (reverse_order)
+      {
+        x = (x_start + 2) * size;
+        diff = -2 * size;
+      }
+      dst = copy_face(dst, face, width, x, size, in_nb_comp, out_nb_comp);
+      dst = copy_face(dst, face, width, x + diff, size, in_nb_comp, out_nb_comp);
+      return dst;
     }
-    else
-    {
-      dst = copy_face(dst, face, width, x_start * size, 2 * size, in_nb_comp, out_nb_comp);
-      dst = copy_face(dst, face, width, x_start * size, 0, in_nb_comp, out_nb_comp);
-    }
+
+    // Y fetch for appending
+    dst = copy_face(dst, face, width, x_start * size, 0, in_nb_comp, out_nb_comp);
+    dst = copy_face(dst, face, width, x_start * size, 2 * size, in_nb_comp, out_nb_comp);
     return dst;
   }
 }

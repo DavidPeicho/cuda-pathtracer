@@ -391,15 +391,15 @@ namespace scene
           img = new float[size * size * NB_COMP * NB_FACES];
           // Sends +/- X faces
           float *tmp = texture::append_cube_faces(
-            img, loaded, w, 0, nb_chan, NB_COMP, true
+            img, loaded, w, 0, nb_chan, NB_COMP, true, true
           );
           // Sends +/- Y faces
           tmp = texture::append_cube_faces(
-            tmp, loaded, w, 1, nb_chan, NB_COMP, false
+            tmp, loaded, w, 1, nb_chan, NB_COMP, false, false
           );
           // Sends +/- Z faces
           texture::append_cube_faces(
-            tmp, loaded, w, 1, nb_chan, NB_COMP, true
+            tmp, loaded, w, 1, nb_chan, NB_COMP, true, false
           );
         }
         else
