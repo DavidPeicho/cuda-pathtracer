@@ -6,6 +6,8 @@
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
 #include <glm/common.hpp>
+
+#define GLM_FORCE_CUDA
 #include <glm/glm.hpp>
 
 #include <iomanip>
@@ -107,7 +109,8 @@ main(int argc, char* argv[])
   glfw_init(&window, window_w, window_h);
 
   // Parses selected scene using TinyObjLoader.
-  scene::Scene scene("assets/crate_land.scene");
+  //scene::Scene scene("assets/wooden_hut_hill.scene");
+  scene::Scene scene("assets/snow_moutain.scene");
   //scene::Scene scene("assets/floor_normal.scene");
   //scene::Scene scene("assets/floor_normal_rotated.scene");
   //scene::Scene scene("assets/cornell.scene");

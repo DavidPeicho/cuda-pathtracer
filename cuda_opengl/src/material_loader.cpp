@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include <iostream>
+
 #include <glm/common.hpp>
 
 #include <stb/stb_image.h>
@@ -17,7 +19,7 @@ namespace scene
   namespace
   {
     Texture
-    packTexture(const Texture& rgb, const Texture& a)
+    pack(const Texture& rgb, const Texture& a)
     {
       size_t size = rgb.w * rgb.h * 4;
 
@@ -39,6 +41,47 @@ namespace scene
       return res;
     }
 
+    Texture
+    pack(const Texture &tex, glm::vec3 default_v)
+    {
+      Texture result = { tex.w, tex.h, 4, new float[tex.w * tex.h * 4] };
+
+      size_t size = tex.h * tex.w * 4;
+      size_t j = 0;
+      for (size_t i = 0; i < size; i += 4)
+      {
+        result.data[i] = default_v[0];
+        result.data[i + 1] = default_v[1];
+        result.data[i + 2] = default_v[2];
+        result.data[i + 3] = tex.data[j++];
+      }
+      return result;
+    }
+
+    /// <summary>
+    /// Adds one additional value to a non-null Texture.
+    /// </summary>
+    /// <param name="tex">Non-null texture containing RGB data.</param>
+    /// <param name="default">Default value of the last channel (A channel).</param>
+    /// <returns></returns>
+    Texture
+    pack(const Texture &tex, float default_v)
+    {
+      Texture result = { tex.w, tex.h, 4, new float[tex.w * tex.h * 4] };
+
+      size_t size = tex.h * tex.w * 4;
+      size_t j = 0;
+      for (size_t i = 0; i < size; i += 4)
+      {
+          result.data[i] = tex.data[j];
+          result.data[i + 1] = tex.data[j + 1];
+          result.data[i + 2] = tex.data[j + 2];
+          result.data[i + 3] = default_v;
+          j += 3;
+      }
+      return result;
+    }
+
     void
     checkAndupload(const std::string& tex, const std::string& base_folder,
         std::unordered_map<std::string, Texture>& loaded_tex)
@@ -52,6 +95,14 @@ namespace scene
       int h = 0;
       int nb_chan = 0;
       float *tmp = stbi_loadf(full_path.c_str(), &w, &h, &nb_chan, STBI_default);
+      if (tmp == nullptr)
+      {
+        std::cerr << "arttracer: MaterialLoader: failed to open "
+                  << full_path << std::endl;
+
+        loaded_tex[tex] = Texture{ 0, 0, 0, nullptr };
+        return;
+      }
 
       // This is actually gross, we duplicate the data in order
       // to free it easily later. If we do not use this, we will
@@ -64,6 +115,16 @@ namespace scene
       loaded_tex[tex] = Texture{
         w, h, nb_chan, data
       };
+    }
+
+    template <typename T>
+    Texture
+    createUnitTex(T default_v, int nb_chan)
+    {
+      float *data = new float[nb_chan];
+      for (unsigned int i = 0; i < nb_chan; ++i) data[i] = default_v[i];
+
+      return { 1, 1, nb_chan, data };
     }
 
   }
@@ -103,13 +164,22 @@ namespace scene
       const tinyobj::material_t &tiny_mat = _tiny_materials[i];
       Material mat;
 
-      glm::vec3 default_diff_rgb(tiny_mat.diffuse[0], tiny_mat.diffuse[1], tiny_mat.diffuse[2]);
-      float default_spec = tiny_mat.shininess;
+      glm::vec3 default_diff_rgb(
+        tiny_mat.diffuse[0], tiny_mat.diffuse[1], tiny_mat.diffuse[2]
+      );
+      float default_spec = (
+        tiny_mat.specular[0] + tiny_mat.specular[1] + tiny_mat.specular[2]
+      ) / 3.0;
 
+      // Loads diffuse and specular map.
       mat.diffuse_spec_map = getTextureId(tiny_mat.diffuse_texname,
         tiny_mat.specular_texname, default_diff_rgb, default_spec);
 
-      mat.normal_map = getTextureId(tiny_mat.bump_texname);
+      // Loads normal map, identified either by `norm' or
+      // by `bump'.
+      std::string normal_map_path = !tiny_mat.bump_texname.empty() ?
+        tiny_mat.bump_texname : tiny_mat.normal_texname;
+      mat.normal_map = getTextureId(normal_map_path);
 
       _materials_gpu.push_back(mat);
     }
@@ -131,14 +201,7 @@ namespace scene
   {
     if (tex_rgb.empty())
     {
-      float *data = new float[3];
-      data[0] = default_rgb[0];
-      data[1] = default_rgb[1];
-      data[2] = default_rgb[2];
-
-      Texture tex = { 1, 1, 3, data };
-      _textures.push_back(tex);
-
+      _textures.push_back(createUnitTex<glm::vec3>(default_rgb, 3));
       unsigned int curr_id = ID++;
       return curr_id;
     }
@@ -154,14 +217,9 @@ namespace scene
     // is not provided any. We will create a 1x1 pixel-wide texture.
     if (tex_rgb.empty() && tex_a.empty())
     {
-      float *data = new float[4];
-      data[0] = default_rgb[0];
-      data[1] = default_rgb[1];
-      data[2] = default_rgb[2];
-      data[3] = default_a;
-
-      Texture tex = { 1, 1, 4, data };
-      _textures.push_back(tex);
+      _textures.push_back(createUnitTex<glm::vec4>(
+        glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+      ));
 
       unsigned int curr_id = ID++;
       return curr_id;
@@ -176,42 +234,45 @@ namespace scene
 
     if (tex_rgb.empty() && !tex_a.empty())
     {
+      unsigned curr_id = ID++;
       const Texture &tex = _loaded_tex[tex_a];
-      Texture result = { tex.w, tex.h, 4, new float[tex.w * tex.h * 4] };
-
-      size_t j = 0;
-      size_t size = tex.h * tex.w * 4;
-      for (size_t i = 0; i < size; i += 4)
+      if (tex.nb_chan == 1)
       {
-        result.data[i] = default_rgb[0];
-        result.data[i + 1] = default_rgb[1];
-        result.data[i + 2] = default_rgb[2];
-        result.data[i + 3] = tex.data[j++];
+        _textures.push_back(pack(tex, default_rgb));
+        return curr_id;
       }
 
-      _textures.push_back(result);
-      unsigned curr_id = ID++;
+      // The texture loading failed, we will send a unit texture.
+      std::cerr << "arttracer: MaterialLoader: \n"
+                << "- '" << tex_a << "': invalid nb of channels."
+                << std::endl;
+
+      _textures.push_back(createUnitTex<glm::vec4>(
+        glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+      ));
+
       return curr_id;
     }
 
     if (!tex_rgb.empty() && tex_a.empty())
     {
+      unsigned curr_id = ID++;
       const Texture &tex = _loaded_tex[tex_rgb];
-      Texture result = { tex.w, tex.h, 4, new float[tex.w * tex.h * 4] };
-
-      size_t size = tex.h * tex.w * 4;
-      size_t j = 0;
-      for (size_t i = 0; i < size; i += 4)
+      if (tex.nb_chan == 3)
       {
-        result.data[i] = tex.data[j];
-        result.data[i + 1] = tex.data[j + 1];
-        result.data[i + 2] = tex.data[j + 2];
-        result.data[i + 3] = default_a;
-        j += 3;
+        _textures.push_back(pack(tex, default_a));
+        return curr_id;
       }
 
-      _textures.push_back(result);
-      unsigned curr_id = ID++;
+      // The texture loading failed, we will send a unit texture.
+      std::cerr << "arttracer: MaterialLoader: \n"
+                << "- '" << tex_rgb << "': invalid nb of channels."
+                << std::endl;
+
+      _textures.push_back(createUnitTex(
+        glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+      ));
+
       return curr_id;
     }
 
@@ -223,8 +284,52 @@ namespace scene
     Texture& rgb_tex = _loaded_tex[tex_rgb];
     Texture& a_tex = _loaded_tex[tex_a];
 
-    // Both textures have the same size, we can
-    // safely create the strided new texture.
+    // One of the textures, or both could not be loaded.
+    // We send a packed texture according to which one is not loaded.
+    if (rgb_tex.nb_chan != 3 || a_tex.nb_chan != 1)
+    {
+      unsigned curr_id = ID++;
+      // Both failed, we send a unit texture
+      if (rgb_tex.nb_chan != 3 && a_tex.nb_chan != 1)
+      {
+        std::cerr << "arttracer: MaterialLoader: \n"
+                  << "- '" << tex_rgb << "' invalid nb of channels.\n"
+                  << "- '" << tex_a << "' invalid nb of channels." << std::endl;
+
+        _textures.push_back(createUnitTex(
+          glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+        ));
+        return curr_id;
+      }
+      // Only one of the two texture fail why loading,
+      // we will pack the one that has successfully loaded
+      // with the default value of the other.
+
+      // RGB texture failed
+      if (rgb_tex.nb_chan != 3)
+      {
+        std::cerr << "arttracer: MaterialLoader: \n"
+          << "- '" << tex_rgb << "': invalid nb of channels."
+          << std::endl;
+
+        _textures.push_back(pack(a_tex, default_rgb));
+        _packed_tex[token] = curr_id;
+        return _packed_tex[token];
+      }
+
+
+      // A texture failed
+      std::cerr << "arttracer: MaterialLoader: \n"
+                << "- '" << tex_a << "': invalid nb of channels."
+                << std::endl;
+
+      _textures.push_back(pack(rgb_tex, default_a));
+      _packed_tex[token] = curr_id;
+      return _packed_tex[token];
+    }
+
+    // Both textures do not have the same size,
+    // we will need to scale them accordingly.
     if (rgb_tex.w != a_tex.w || rgb_tex.h != a_tex.h)
     {
       // We will choose to resize the texture to
@@ -254,7 +359,7 @@ namespace scene
       }
     }
 
-    Texture packed = packTexture(rgb_tex, a_tex);
+    Texture packed = pack(rgb_tex, a_tex);
     _textures.push_back(packed);
     _packed_tex[token] = ID++;
 
@@ -269,8 +374,10 @@ namespace scene
     checkAndupload(tex_rgb, _mtl_folder, _loaded_tex);
 
     const Texture& tex = _loaded_tex[tex_rgb];
-    _packed_tex[tex_rgb] = ID;
+    if (tex.nb_chan == 0)
+      return -1;
 
+    _packed_tex[tex_rgb] = ID;
     _textures.push_back(tex);
 
     unsigned int curr_id = ID++;

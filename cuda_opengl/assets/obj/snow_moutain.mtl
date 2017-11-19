@@ -1,0 +1,24 @@
+newmtl crate
+Ns 92.156863
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 0.00000 0.00000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 1
+map_Kd textures/metal_crate/albedo.jpg
+norm textures/metal_crate/normal.jpg
+map_Ks textures/metal_crate/specular.jpg
+
+newmtl snow
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.640000 0.640000 0.640000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 1
+map_Kd textures/snow_clear/albedo.jpg
+norm textures/snow_clear/normal.jpg

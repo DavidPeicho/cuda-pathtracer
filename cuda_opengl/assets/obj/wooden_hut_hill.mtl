@@ -1,0 +1,38 @@
+# Blender MTL File: 'untitled.blend'
+# Material Count: 3
+
+newmtl floor
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 1
+map_Kd textures\lime_stone\albedo.jpg
+norm textures\lime_stone\normal.jpg
+
+newmtl ground
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 1
+map_Kd textures\mixed_moss\albedo.jpg
+norm textures\mixed_moss\normal.jpg
+
+newmtl wall
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 1
+map_Kd textures\wooden_planck\albedo.jpg
+norm textures\wooden_planck\normal.jpg

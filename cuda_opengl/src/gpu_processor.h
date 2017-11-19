@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cuda.h>
+
+#define GLM_FORCE_CUDA
 #include <glm/glm.hpp>
 
 #include "driver/interop.h"
@@ -72,6 +74,7 @@ namespace processor
 
       bool _keys[65536];
       bool _moved;
+      float _cam_speed;
 
       glm::vec2 _angle = glm::vec2(0.0f, M_PI);
   };

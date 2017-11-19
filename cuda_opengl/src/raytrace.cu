@@ -6,6 +6,8 @@
 #include <curand_kernel.h>
 
 #include <glm/common.hpp>
+
+#define GLM_FORCE_CUDA
 #include <glm/glm.hpp>
 
 #include <stdbool.h>
@@ -20,8 +22,6 @@
 #include "post_process.cuh"
 
 surface<void, cudaSurfaceType2D> surf;
-//texture<float, cudaTextureTypeCubemap> cubemap_ref;
-//texture<uint4, cudaTextureTypeCubemap> cubemap_ref;
 texture<float4, cudaTextureTypeCubemap> cubemap_ref;
 
 union rgba_24
@@ -76,6 +76,19 @@ sampleTexture(const scene::Buffer<scene::Texture>& textures,
   out.z = tex.data[idx + 2];
 }
 
+__device__ inline void
+sampleTexture(const scene::Buffer<scene::Texture>& textures,
+  int tex_id, const glm::vec2& uv, glm::vec4& out)
+{
+  const scene::Texture &tex = textures.data[tex_id];
+  int idx = getTextureIdx(tex, uv);
+
+  out.x = tex.data[idx];
+  out.y = tex.data[idx + 1];
+  out.z = tex.data[idx + 2];
+  out.w = tex.data[idx + 3];
+}
+
 HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
             const int half_w, const int half_h, const scene::Camera &cam)
@@ -115,8 +128,8 @@ intersectTriangle(const scene::Face &face, glm::vec3 &out_normal,
 	if (v < 0 || u + v > 1) return false;
 
   // Interpolates normals
-  //out_normal = (1.0f - u - v) * v_norm[0] + u * v_norm[1] + v * v_norm[2];
-  out_normal = face.normals[0];
+  out_normal = (1.0f - u - v) * face.normals[0] + u * face.normals[1] + v * face.normals[2];
+  //out_normal = face.normals[0];
   // Interpolates uvs
   out_uv = (1.0f - u - v) * face.texcoords[0] + u * face.texcoords[1] + v * face.texcoords[2];
   out_uv = glm::mod(out_uv, 1.0f); // UVs should be in [0.0, 1.0]
@@ -200,7 +213,12 @@ intersect(const scene::Ray& r,
   if (inter_mat)
   {
     // Fetches diffuse color from texture
-    sampleTexture(scene->textures, inter_mat->diffuse_spec_map, intersection.uv, intersection.diffuse_col);
+    glm::vec4 fetch;
+    sampleTexture(scene->textures, inter_mat->diffuse_spec_map, intersection.uv, fetch);
+    intersection.diffuse_col.x = fetch.x;
+    intersection.diffuse_col.y = fetch.y;
+    intersection.diffuse_col.z = fetch.z;
+    intersection.specular_col = fetch.w;
 
     // Computes normal perturbated by normal map
     if (inter_mat->normal_map >= 0)
@@ -271,8 +289,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  const int max_bounces = 1 + is_static * (static_samples + 1);
-  //const int max_bounces = 1;
+  //const int max_bounces = 1 + is_static * (static_samples + 1);
+  const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  glm::vec3 oriented_normal;
@@ -283,7 +301,6 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 	  {
 		  float cos_theta = glm::dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
-		  oriented_normal = inter.normal;
 
 		  glm::vec3 BRDF;
 
@@ -294,7 +311,6 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  // Oren-Nayar diffuse
 		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
 		  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
-
 		  if (inter.is_light)
 		  {
 			  acc += inter.light->emission * throughput;
@@ -307,7 +323,6 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 			  BRDF = glm::vec3(inter.light->color[0], inter.light->color[1], inter.light->color[2]);
 		  }
-
 		  glm::vec3 d;
 		  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
 
@@ -325,7 +340,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 
 		  r.origin += r.dir * inter.dist;
 
-		  r.dir = glm::mix(spec, d, inter.specular_col);
+      r.dir = glm::mix(d, spec, inter.specular_col);
 		  r.origin += r.dir * 0.03f;
 
 		  //Lambert BRDF/PDF
@@ -337,8 +352,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  //acc = glm::vec3(glm::mix(inter.diffuse_col[0], inter.specular_col, 0.4));
 		  //acc += thoughput;// *sample_lights(r, scene, PDF, inter);
 
-		  /*if (is_static)
-			acc += thoughput * sample_lights(r, scene, PDF, inter);*/
+		  //if (is_static)
+			//acc += thoughput * sample_lights(r, scene, PDF, inter);//
 
 		  // Russian roulette
 		  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));

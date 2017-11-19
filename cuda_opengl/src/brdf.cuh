@@ -1,5 +1,6 @@
 #pragma once
 
+#define GLM_FORCE_CUDA
 #include <glm/common.hpp>
 #include <glm/glm.hpp>
 

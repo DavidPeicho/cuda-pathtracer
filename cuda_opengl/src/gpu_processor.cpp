@@ -20,6 +20,9 @@ namespace processor
                , _width(width)
                , _height(height)
                , _interop(width, height)
+               , _d_temporal_framebuffer(nullptr)
+               , _moved(false)
+               , _cam_speed(1.0f)
   {
     //cudaSetDevice(_gpu_info.getCUDAGPU().device_id);
     // Logs information about the GPUs.
@@ -60,6 +63,7 @@ namespace processor
 
     raytrace(_interop.getArray(), cpu_scene, gpu_scene, cam, _width,
         _height, _stream, _d_temporal_framebuffer, _moved);
+
     cuda_err = _interop.unmap(_stream);
 
     this->setMoved(false);
@@ -69,10 +73,10 @@ namespace processor
     cam->v = cross(cam->dir, cam->u);
 
     // Updates cam position
-    if (this->isKeyPressed(GLFW_KEY_W)) cam->position += cam->dir * delta;
-    if (this->isKeyPressed(GLFW_KEY_S)) cam->position -= cam->dir * delta;
-    if (this->isKeyPressed(GLFW_KEY_A)) cam->position -= cam->u * delta;
-    if (this->isKeyPressed(GLFW_KEY_D)) cam->position += cam->u * delta;
+    if (this->isKeyPressed(GLFW_KEY_W)) cam->position += cam->dir * _cam_speed * delta;
+    if (this->isKeyPressed(GLFW_KEY_S)) cam->position -= cam->dir * _cam_speed * delta;
+    if (this->isKeyPressed(GLFW_KEY_A)) cam->position -= cam->u * _cam_speed * delta;
+    if (this->isKeyPressed(GLFW_KEY_D)) cam->position += cam->u * _cam_speed * delta;
 
     // Resets camera orientation
     if (this->isKeyPressed(GLFW_KEY_SPACE))
@@ -83,6 +87,11 @@ namespace processor
       _angle.x = 0.0;
       _angle.y = M_PI;
     }
+
+    if (this->isKeyPressed(GLFW_KEY_LEFT_SHIFT))
+      _cam_speed += 0.05;
+    else
+      _cam_speed = 1.0;
 
     _interop.blit();
     _interop.swap();
