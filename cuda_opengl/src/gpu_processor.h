@@ -61,6 +61,12 @@ namespace processor
         _moved = moved;
       }
 
+      inline driver::Interop&
+      getInterop()
+      {
+        return _interop;
+      }
+
     private:
       scene::Scene &_scene;
       int _width;

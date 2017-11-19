@@ -128,8 +128,8 @@ intersectTriangle(const scene::Face &face, glm::vec3 &out_normal,
 	if (v < 0 || u + v > 1) return false;
 
   // Interpolates normals
-  out_normal = (1.0f - u - v) * face.normals[0] + u * face.normals[1] + v * face.normals[2];
-  //out_normal = face.normals[0];
+  //out_normal = (1.0f - u - v) * face.normals[0] + u * face.normals[1] + v * face.normals[2];
+  out_normal = face.normals[0];
   // Interpolates uvs
   out_uv = (1.0f - u - v) * face.texcoords[0] + u * face.texcoords[1] + v * face.texcoords[2];
   out_uv = glm::mod(out_uv, 1.0f); // UVs should be in [0.0, 1.0]
@@ -482,7 +482,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
 	// TODO: We should get into account GPU info, such as number of registers,
 	// shared memory size, warp size, etc...
 	dim3 threads_per_block(16, 16);
-	dim3 nb_blocks(width / threads_per_block.x, height / threads_per_block.y);
+	dim3 nb_blocks(width / threads_per_block.x + 1, height / threads_per_block.y + 1);
 
 	if (nb_blocks.x > 0 && nb_blocks.y > 0)
 		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, gpu_scene, *cam,

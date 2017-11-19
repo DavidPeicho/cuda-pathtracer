@@ -25,8 +25,7 @@
 static void
 glfw_init(GLFWwindow** window, const int width, const int height)
 {
-	if (!glfwInit())
-		exit(EXIT_FAILURE);
+	if (!glfwInit()) exit(EXIT_FAILURE);
 
 	glfwWindowHint(GLFW_DEPTH_BITS, 0);
 	glfwWindowHint(GLFW_STENCIL_BITS, 0);
@@ -47,9 +46,7 @@ glfw_init(GLFWwindow** window, const int width, const int height)
 	}
 
 	glfwMakeContextCurrent(*window);
-
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-
 	glfwSwapInterval(0);
 
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
@@ -59,13 +56,14 @@ static
 void
 glfw_window_size_callback(GLFWwindow* window, int width, int height)
 {
-  // TODO: Do not use interop anymore
-	driver::Interop* const interop =
-		(driver::Interop* const)glfwGetWindowUserPointer(window);
+  processor::GPUProcessor* const processor =
+    (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
 
-	unsigned int pow2_width = utils::nextPow2(width);
-	unsigned int pow2_height = utils::nextPow2(height);
-	interop->setSize(pow2_width, pow2_height);
+  auto& interop = processor->getInterop();
+
+	//unsigned int pow2_width = utils::nextPow2(width);
+	//unsigned int pow2_height = utils::nextPow2(height);
+	interop.setSize(width, height);
 }
 
 void
@@ -102,18 +100,16 @@ main(int argc, char* argv[])
     //return 1;
   }
 
-  const int window_w = 1024;
-  const int window_h = 1024;
+  const int window_w = 512;
+  const int window_h = 512;
 
   GLFWwindow* window;
   glfw_init(&window, window_w, window_h);
 
   // Parses selected scene using TinyObjLoader.
   //scene::Scene scene("assets/wooden_hut_hill.scene");
-  scene::Scene scene("assets/snow_moutain.scene");
-  //scene::Scene scene("assets/floor_normal.scene");
-  //scene::Scene scene("assets/floor_normal_rotated.scene");
-  //scene::Scene scene("assets/cornell.scene");
+  //scene::Scene scene("assets/snow_moutain.scene");
+  scene::Scene scene("assets/crate_land.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
   processor::GPUProcessor processor(scene, window_w, window_h);

@@ -81,6 +81,8 @@ namespace processor
     // Resets camera orientation
     if (this->isKeyPressed(GLFW_KEY_SPACE))
     {
+      std::cout << cam->dir.x << " | " << cam->dir.y << " | " << cam->dir.z << std::endl;
+
       cam->dir.x = 0.0;
       cam->dir.y = 0.0;
       cam->dir.z = -1.0;
@@ -89,7 +91,10 @@ namespace processor
     }
 
     if (this->isKeyPressed(GLFW_KEY_LEFT_SHIFT))
+    {
+      std::cout << cam->position.x << " | " << cam->position.y << " | " << cam->position.z << std::endl;
       _cam_speed += 0.05;
+    }
     else
       _cam_speed = 1.0;
 
