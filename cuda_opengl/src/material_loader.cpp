@@ -5,8 +5,6 @@
 
 #include <iostream>
 
-#include <glm/common.hpp>
-
 #include <stb/stb_image.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
@@ -42,7 +40,7 @@ namespace scene
     }
 
     Texture
-    pack(const Texture &tex, glm::vec3 default_v)
+    pack(const Texture &tex, float3 default_v)
     {
       Texture result = { tex.w, tex.h, 4, new float[tex.w * tex.h * 4] };
 
@@ -50,9 +48,9 @@ namespace scene
       size_t j = 0;
       for (size_t i = 0; i < size; i += 4)
       {
-        result.data[i] = default_v[0];
-        result.data[i + 1] = default_v[1];
-        result.data[i + 2] = default_v[2];
+        result.data[i] = default_v.x;
+        result.data[i + 1] = default_v.y;
+        result.data[i + 2] = default_v.z;
         result.data[i + 3] = tex.data[j++];
       }
       return result;
@@ -117,14 +115,27 @@ namespace scene
       };
     }
 
-    template <typename T>
     Texture
-    createUnitTex(T default_v, int nb_chan)
+    createUnitTex(float3 default_v)
     {
-      float *data = new float[nb_chan];
-      for (unsigned int i = 0; i < nb_chan; ++i) data[i] = default_v[i];
+      float *data = new float[3];
+      data[0] = default_v.x;
+      data[1] = default_v.y;
+      data[2] = default_v.z;
 
-      return { 1, 1, nb_chan, data };
+      return { 1, 1, 3, data };
+    }
+
+    Texture
+    createUnitTex(float4 default_v)
+    {
+      float *data = new float[4];
+      data[0] = default_v.x;
+      data[1] = default_v.y;
+      data[2] = default_v.z;
+      data[3] = default_v.w;
+
+      return { 1, 1, 4, data };
     }
 
   }
@@ -164,7 +175,7 @@ namespace scene
       const tinyobj::material_t &tiny_mat = _tiny_materials[i];
       Material mat;
 
-      glm::vec3 default_diff_rgb(
+      float3 default_diff_rgb = make_float3(
         tiny_mat.diffuse[0], tiny_mat.diffuse[1], tiny_mat.diffuse[2]
       );
       float default_spec = (
@@ -182,7 +193,6 @@ namespace scene
       mat.normal_map = getTextureId(normal_map_path);
 
 	  mat.ior = tiny_mat.ior;
-	  std::cout << "mat ior " << mat.ior << std::endl;
 
       _materials_gpu.push_back(mat);
     }
@@ -200,11 +210,11 @@ namespace scene
   }
 
   int
-  MaterialLoader::getTextureId(std::string tex_rgb, glm::vec3 default_rgb)
+  MaterialLoader::getTextureId(std::string tex_rgb, float3 default_rgb)
   {
     if (tex_rgb.empty())
     {
-      _textures.push_back(createUnitTex<glm::vec3>(default_rgb, 3));
+      _textures.push_back(createUnitTex(default_rgb));
       unsigned int curr_id = ID++;
       return curr_id;
     }
@@ -213,15 +223,15 @@ namespace scene
 
   int
   MaterialLoader::getTextureId(std::string tex_rgb, std::string tex_a,
-      glm::vec3 default_rgb, float default_a)
+      float3 default_rgb, float default_a)
   {
     // CASE 1: There is no texture provided.
     // We will build a custom texture if the material
     // is not provided any. We will create a 1x1 pixel-wide texture.
     if (tex_rgb.empty() && tex_a.empty())
     {
-      _textures.push_back(createUnitTex<glm::vec4>(
-        glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+      _textures.push_back(createUnitTex(
+        make_float4(default_rgb.x, default_rgb.y, default_rgb.z, default_a)
       ));
 
       unsigned int curr_id = ID++;
@@ -250,8 +260,8 @@ namespace scene
                 << "- '" << tex_a << "': invalid nb of channels."
                 << std::endl;
 
-      _textures.push_back(createUnitTex<glm::vec4>(
-        glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+      _textures.push_back(createUnitTex(
+        make_float4(default_rgb.x, default_rgb.y, default_rgb.z, default_a)
       ));
 
       return curr_id;
@@ -273,7 +283,7 @@ namespace scene
                 << std::endl;
 
       _textures.push_back(createUnitTex(
-        glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+        make_float4(default_rgb.x, default_rgb.y, default_rgb.z, default_a)
       ));
 
       return curr_id;
@@ -300,7 +310,7 @@ namespace scene
                   << "- '" << tex_a << "' invalid nb of channels." << std::endl;
 
         _textures.push_back(createUnitTex(
-          glm::vec4(default_rgb.r, default_rgb.g, default_rgb.b, default_a), 4
+          make_float4(default_rgb.x, default_rgb.y, default_rgb.z, default_a)
         ));
         return curr_id;
       }

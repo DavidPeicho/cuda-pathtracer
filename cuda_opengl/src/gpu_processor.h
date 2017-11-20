@@ -2,11 +2,10 @@
 
 #include <cuda.h>
 
-#define GLM_FORCE_CUDA
-#include <glm/glm.hpp>
-
 #include "driver/interop.h"
 #include "driver/gpu_info.h"
+
+#include "shaders/cutils_math.h"
 
 #include "scene.h"
 
@@ -42,14 +41,14 @@ namespace processor
         _angle.x -= x_step * 0.001;
         _angle.y += y_step * 0.001;
 
-        glm::vec3 offset = glm::vec3(
+        float3 offset = make_float3(
           cos(_angle.y) * sin(_angle.x),
           sin(_angle.y),
           cos(_angle.y) * cos(_angle.x)
         );
 
         _scene.getCamPointer()->dir += offset;
-        _scene.getCamPointer()->dir = glm::normalize(_scene.getCamPointer()->dir);
+        _scene.getCamPointer()->dir = normalize(_scene.getCamPointer()->dir);
       }
 
       bool
@@ -76,12 +75,12 @@ namespace processor
       driver::GPUInfo _gpu_info;
       cudaStream_t _stream;
 
-      glm::vec3* _d_temporal_framebuffer;
+      float3* _d_temporal_framebuffer;
 
       bool _keys[65536];
       bool _moved;
       float _cam_speed;
 
-      glm::vec2 _angle = glm::vec2(0.0f, M_PI);
+      float2 _angle = make_float2(0.0f, M_PI);
   };
 } // namespace processor

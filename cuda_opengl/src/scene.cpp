@@ -4,7 +4,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include <glm/geometric.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -24,6 +23,8 @@
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "scene.h"
+
+#include "shaders/cutils_math.h"
 
 #include "texture_utils.h"
 
@@ -73,7 +74,7 @@ namespace scene
       return img;
     }
 
-    bool parse_double3(glm::vec3 &out, std::stringstream& iss)
+    bool parse_double3(float3 &out, std::stringstream& iss)
     {
       if (iss.peek() == std::char_traits<char>::eof())
         return false;
@@ -89,22 +90,6 @@ namespace scene
       return true;
     }
 
-    bool parse_double3(tinyobj::real_t out[3], std::stringstream& iss)
-    {
-      if (iss.peek() == std::char_traits<char>::eof())
-        return false;
-
-      std::string token;
-
-      if ((iss >> out[0]).peek() == std::char_traits<char>::eof())
-        return false;
-      if ((iss >> out[1]).peek() == std::char_traits<char>::eof())
-        return false;
-
-      iss >> out[2];
-      return true;
-    }
-
     bool parse_camera(scene::Camera &cam, std::stringstream& iss)
     {
       if (!parse_double3(cam.position, iss)) return false;
@@ -113,12 +98,12 @@ namespace scene
 
       if (iss.peek() == std::char_traits<char>::eof()) return false;
 
-      cam.u = glm::normalize(cam.u);
-      cam.v = glm::normalize(cam.v);
+      cam.u = normalize(cam.u);
+      cam.v = normalize(cam.v);
 
       iss >> cam.fov_x;
       cam.fov_x = (cam.fov_x * M_PI) / 180.0;
-      cam.dir = glm::cross(cam.u, cam.v);
+      cam.dir = cross(cam.u, cam.v);
       return true;
     }
 
@@ -131,10 +116,10 @@ namespace scene
         throw std::runtime_error("parse_scene(): failed to open '" + filename + "'");
 
       // Creates default camera, used when no camera is found in the .scene file
-      cam.u = glm::vec3(1.0, 0.0, 0.0);
-      cam.v = glm::vec3(0.0, -1.0, 0.0);
+      cam.u = make_float3(1.0, 0.0, 0.0);
+      cam.v = make_float3(0.0, -1.0, 0.0);
       cam.fov_x = (90.0 * M_PI) / 180.0;
-      cam.dir = glm::cross(cam.u, cam.v);
+      cam.dir = cross(cam.u, cam.v);
 
       // Contains every lights. Because we do not use vector
       // on CUDA, we will need to make a deep copy of it.
@@ -228,12 +213,14 @@ namespace scene
         cudaMalloc(&gpu_tex.data, nb_bytes);
         cudaThrowError();
         cudaMemcpy(gpu_tex.data, cpu_tex.data, nb_bytes, cudaMemcpyHostToDevice);
+        cudaThrowError();
       }
       if (gpu_textures.size())
       {
         cudaMalloc(&scene->textures.data, cpu_textures.size() * sizeof(scene::Texture));
         cudaThrowError();
         cudaMemcpy(scene->textures.data, &gpu_textures[0], cpu_textures.size() * sizeof(scene::Texture), cudaMemcpyHostToDevice);
+        cudaThrowError();
       }
 
       // Uploads every materials to the GPU
@@ -242,6 +229,7 @@ namespace scene
         cudaMalloc(&scene->materials.data, cpu_mat.size() * sizeof(scene::Material));
         cudaThrowError();
         cudaMemcpy(scene->materials.data, &cpu_mat[0], cpu_mat.size() * sizeof(scene::Material), cudaMemcpyHostToDevice);
+        cudaThrowError();
       }
 
       scene->materials.size = cpu_mat.size();
@@ -284,19 +272,19 @@ namespace scene
           {
             tinyobj::index_t idx = mesh.indices[i + v];
             // Saves vertex
-            face.vertices[v] = glm::vec3(
+            face.vertices[v] = make_float3(
               attrib.vertices[3 * idx.vertex_index],
               attrib.vertices[3 * idx.vertex_index + 1],
               attrib.vertices[3 * idx.vertex_index + 2]
             );
             // Saves normal
-            face.normals[v] = glm::vec3(
+            face.normals[v] = make_float3(
               attrib.normals[3 * idx.normal_index],
               attrib.normals[3 * idx.normal_index + 1],
               attrib.normals[3 * idx.normal_index + 2]
             );
             // Saves normal
-            face.texcoords[v] = glm::vec2(
+            face.texcoords[v] = make_float2(
               attrib.texcoords[2 * idx.texcoord_index],
               attrib.texcoords[2 * idx.texcoord_index + 1]
             );
@@ -304,10 +292,10 @@ namespace scene
           face.material_id = mesh.material_ids[i / 3];
 
           // Computes a unique tangent for the whole face
-          glm::vec3 edge1 = face.vertices[1] - face.vertices[0];
-          glm::vec3 edge2 = face.vertices[2] - face.vertices[0];
-          glm::vec2 delta_uv1 = face.texcoords[1] - face.texcoords[0];
-          glm::vec2 delta_uv2 = face.texcoords[2] - face.texcoords[0];
+          float3 edge1 = face.vertices[1] - face.vertices[0];
+          float3 edge2 = face.vertices[2] - face.vertices[0];
+          float2 delta_uv1 = face.texcoords[1] - face.texcoords[0];
+          float2 delta_uv2 = face.texcoords[2] - face.texcoords[0];
 
           float f = 1.0f / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
 

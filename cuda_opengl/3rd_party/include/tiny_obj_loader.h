@@ -44,8 +44,6 @@ THE SOFTWARE.
 #ifndef TINY_OBJ_LOADER_H_
 #define TINY_OBJ_LOADER_H_
 
-#include <glm/common.hpp>
-
 #include <map>
 #include <string>
 #include <vector>
@@ -1781,50 +1779,6 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
   attrib->vertices.swap(v);
   attrib->normals.swap(vn);
   attrib->texcoords.swap(vt);
-
-  /*
-    This code is a hack to compute tangents. A good
-    thing would be to fork tinyobjloader and to add tangent
-    calculation *without* using glm. This is a TODO!
-  */
-
-  /*for (size_t i = 0; i < shapes->size(); ++i)
-  {
-    size_t index_offset = 0;
-    mesh_t &mesh = (*shapes)[i].mesh;
-    for (size_t f_idx = 0; f_idx < mesh.num_face_vertices.size(); f_idx++)
-    {
-      glm::vec3 vertices[3];
-      glm::vec3 normals[3];
-      glm::vec2 uvs[3];
-
-      for (size_t v = 0; v < 3; ++v)
-      {
-        tinyobj::index_t idx = mesh.indices[index_offset + v];
-        vertices[v].x = attrib->vertices[3 * idx.vertex_index];
-        vertices[v].y = attrib->vertices[3 * idx.vertex_index + 1];
-        vertices[v].z = attrib->vertices[3 * idx.vertex_index + 2];
-        normals[v].x = attrib->normals[3 * idx.normal_index];
-        normals[v].y = attrib->normals[3 * idx.normal_index + 1];
-        normals[v].z = attrib->normals[3 * idx.normal_index + 2];
-        uvs[v].x = attrib->texcoords[2 * idx.texcoord_index];
-        uvs[v].y = attrib->texcoords[2 * idx.texcoord_index + 1];
-      }
-
-
-
-      auto s = attrib->tangents.size() / 3;
-      mesh.indices[index_offset + 0].tangent = s;
-      mesh.indices[index_offset + 1].tangent = s;
-      mesh.indices[index_offset + 2].tangent = s;
-
-      attrib->tangents.push_back(tangent.x);
-      attrib->tangents.push_back(tangent.y);
-      attrib->tangents.push_back(tangent.z);
-
-      index_offset += 3;
-    }
-  }*/
 
   return true;
 }

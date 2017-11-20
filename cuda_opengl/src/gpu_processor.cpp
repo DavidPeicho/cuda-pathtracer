@@ -6,13 +6,13 @@
 #include "driver/cuda_helper.h"
 
 #include "gpu_processor.h"
-#include "raytrace.h"
+#include "shaders/raytrace.h"
 
 namespace processor
 {
   namespace
   {
-    static const glm::vec3 WORLD_DOWN_VEC(0.0, -1.0, 0.0);
+    static const float3 WORLD_DOWN_VEC = make_float3(0.0f, -1.0f, 0.0f);
   }
 
   GPUProcessor::GPUProcessor(scene::Scene& scene, int width, int height)
@@ -33,7 +33,7 @@ namespace processor
     std::cout << _gpu_info.getProfile() << std::endl;
 
     cudaStreamCreateWithFlags(&_stream, cudaStreamDefault);
-    cudaMalloc(&_d_temporal_framebuffer, _width * _height * sizeof(glm::vec3));
+    cudaMalloc(&_d_temporal_framebuffer, _width * _height * sizeof(float3));
 
     // Initializes all keys to released
     for (size_t i = 0; i < 65536; ++i)
