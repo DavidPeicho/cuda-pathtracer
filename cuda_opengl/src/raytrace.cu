@@ -48,6 +48,7 @@ struct IntersectionData
   glm::vec2 uv;
   const scene::LightProp *light;
   bool is_light;
+  float ior;
 };
 
 /*
@@ -141,14 +142,14 @@ intersectTriangle(const scene::Face &face, glm::vec3 &out_normal,
 __device__ bool
 intersectSphere(const scene::Ray &r, const scene::LightProp & const light, float& t)
 {
-  static const float epsilon = 0.01f;
+    static const float epsilon = 0.01f;
 
 	glm::vec3 op = light.vec - r.origin;
 	float b = dot(op, r.dir);
 	float disc = b*b - dot(op, op) + light.radius * light.radius;
 	if (disc < 0.0) return 0;
 
-  disc = __fsqrt_rn(disc);
+	disc = __fsqrt_rn(disc);
 	(t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0);
 
 	return t != 0.0;
@@ -177,7 +178,8 @@ intersect(const scene::Ray& r,
       if (intersectTriangle(face, normal, uv, r, inter_dist)
         && inter_dist < intersection.dist && inter_dist > 0.0)
       {
-        inter_mat = &scene->materials.data[face.material_id];
+		inter_mat = &scene->materials.data[face.material_id];
+		intersection.ior = inter_mat->ior;
         intersection.normal = normal;
         intersection.surface_normal = normal;
         intersection.tangent = face.tangent;
@@ -289,8 +291,8 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  //const int max_bounces = 1 + is_static * (static_samples + 1);
-  const int max_bounces = 1;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
+  //const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  glm::vec3 oriented_normal;
@@ -319,35 +321,97 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			  if (r1 > p && b > 1)
 				  return acc;
 
-			  throughput *= 1.0 / p;
+			  throughput *= __fdividef(1.0f, p);
 
 			  BRDF = glm::vec3(inter.light->color[0], inter.light->color[1], inter.light->color[2]);
 		  }
-		  glm::vec3 d;
-		  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
-
-		  //r1 *= inter.specular_col;
-
-		  float sin_t = sqrtf(r1);
-		  float cos_t = sqrt(1.f - r1);
-
-		  glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
-		  glm::vec3 v = glm::cross(oriented_normal, u);
-
-		  //Diffuse hemishphere reflection
-		  glm::vec3 spec = glm::reflect(r.dir, oriented_normal);
-		  d = glm::normalize(v * sin_t * cos(phi) + u * sin(phi) * sin_t + oriented_normal * cos_t);
-
-		  r.origin += r.dir * inter.dist;
-
-      r.dir = glm::mix(d, spec, inter.specular_col);
-		  r.origin += r.dir * 0.03f;
 
 		  //Lambert BRDF/PDF
 		  float PDF = pdf_lambert(); // Divided by PI
 		  glm::vec3 direct_light = BRDF / PDF;
 
-		  throughput *= direct_light;
+		  glm::vec3 d;
+		  glm::vec3 spec = glm::reflect(r.dir, oriented_normal);
+		  if (inter.ior == 1.0f)
+		  {
+			  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
+
+			  //r1 *= inter.specular_col;
+
+			  float sin_t = __fsqrt_rn(r1);
+			  float cos_t = __fsqrt_rn(1.f - r1);
+
+			  glm::vec3 u = glm::normalize(glm::cross(fabs(oriented_normal.x) > .1 ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f), oriented_normal));
+			  glm::vec3 v = glm::cross(oriented_normal, u);
+
+			  //Diffuse hemishphere reflection
+			  d = glm::normalize(v * sin_t * __cosf(phi) + u * __sinf(phi) * sin_t + oriented_normal * cos_t);
+
+			  r.origin += oriented_normal * inter.dist / 100.f;
+
+			  r.dir = glm::mix(d, spec, inter.specular_col);
+		  }
+		  else
+		  {
+			  // Transmision
+			  float n1 = 1.0f; // sin theta2
+			  float n2 = 1.5f; // sin theta1
+			  float c1 = glm::dot(oriented_normal, r.dir);
+			  bool entering = glm::dot(inter.normal, oriented_normal) > 0;
+			  float eta = entering ? n1 / n2 : n2 / n1;
+			  float eta_2 = eta * eta;
+
+			  float c2_term = 1.0f - eta_2 * (1.0f - c1 * c1);
+			  if (c2_term < 0.0f)
+			  {
+				  r.origin += oriented_normal * inter.dist / 100.f;
+
+				  throughput *= direct_light;
+
+				  //return glm::vec3(0.0f, 1.0f, 0.0f);
+				  r.dir = spec;
+			  }
+			  else
+			  {
+				  float R0 = (n2 - n1) / (n1 + n2);
+				  R0 *= R0;
+				  float c2 = __fsqrt_rn(c2_term);
+				  glm::vec3 T = glm::normalize(eta * r.dir + (eta * c1 - c2) * oriented_normal);
+
+				  float f_cos_theta = 1.0f - (entering ? c1 : glm::dot(T, inter.normal));
+				  f_cos_theta = powf(cos_theta, 5.0f);
+				  // Fresnel Schlick
+				  float f_r = R0 + (1.0f - R0) * f_cos_theta;
+
+				  //return glm::vec3(f_r);
+
+				  if (curand_uniform(rand_state) < 0.25f)
+				  {
+					  throughput *= f_r * direct_light;
+
+					  //return glm::vec3(1.0f, 0.0f, 0.0f);
+
+					  r.origin += oriented_normal * inter.dist / 100.f;
+
+					  r.dir = spec;// glm::mix(d, spec, inter.specular_col);
+				  }
+				  else
+				  {
+					  // Energy conservation
+					  float f_t = 1.0f - f_r;
+
+					  //return glm::vec3(0.0f, 0.0f, 1.0f);
+					  throughput *= f_t * direct_light;
+
+					  r.origin += oriented_normal * inter.dist / 10000.f;
+
+					  r.dir = T;
+				  }
+			  }
+		  }
+
+		  //r.origin += oriented_normal * 0.03f;
+		  //throughput *= direct_light;
 
 		  //acc = glm::vec3(glm::mix(inter.diffuse_col[0], inter.specular_col, 0.4));
 		  //acc += thoughput;// *sample_lights(r, scene, PDF, inter);
@@ -356,11 +420,14 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 			//acc += thoughput * sample_lights(r, scene, PDF, inter);//
 
 		  // Russian roulette
-		  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
-		  if (r1 > p && b > 1)
-			  return acc;
+		  if (!inter.is_light)
+		  {
+			  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
+			  if (r1 > p && b > 1)
+				  return acc;
 
-		  throughput *= 1.0 / p;
+			  throughput *= __fdividef(1.0f, p);
+		  }
 	  }
 	  else
 	  {
@@ -371,7 +438,7 @@ __device__ inline glm::vec3 radiance(scene::Ray& r,
 		  if (r1 > p && b > 1)
 			  return acc;
 
-		  throughput *= 1.0 / p;
+		  throughput *= __fdividef(1.0f, p);
 	  }
   }
 
@@ -417,9 +484,9 @@ kernel(const unsigned int width, const unsigned int height,
 	int samples = 2 + is_static * static_samples;
 
     glm::vec3 rad = glm::vec3(0.0f);
-	for (int i = 0; i < samples; i++)
-		rad += radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-    rad /= samples;
+	//for (int i = 0; i < samples; i++)
+	rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
+    //rad /= samples;
 
 	rad = glm::clamp(rad, 0.0f, 1.0f);
 

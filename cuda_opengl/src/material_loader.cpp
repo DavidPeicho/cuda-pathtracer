@@ -181,6 +181,9 @@ namespace scene
         tiny_mat.bump_texname : tiny_mat.normal_texname;
       mat.normal_map = getTextureId(normal_map_path);
 
+	  mat.ior = tiny_mat.ior;
+	  std::cout << "mat ior " << mat.ior << std::endl;
+
       _materials_gpu.push_back(mat);
     }
 

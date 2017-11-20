@@ -22,6 +22,6 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 2
-map_Kd textures/crate.jpg
-map_Bump textures/crate_normal.jpg
-map_Ks textures/create_specular.jpg
+map_Kd textures/metal_crate/albedo.jpg
+map_Bump textures/metal_crate/normal.jpg
+map_Ks textures/metal_crate/specular.jpg

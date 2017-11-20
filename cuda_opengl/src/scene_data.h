@@ -50,6 +50,7 @@ namespace scene
   {
     int diffuse_spec_map;
     int normal_map;
+	float ior;
   };
 
   struct LightProp

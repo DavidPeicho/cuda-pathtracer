@@ -36,6 +36,8 @@ brdf_oren_nayar(float n_dot_v, float n_dot_l, glm::vec3 light_dir, glm::vec3 vie
 	return glm::vec3(glm::vec3(color) * glm::vec3(L1));
 }
 
+//__device__ inline glm::vec3 btdf_refraction()
+
 __device__ inline glm::vec3 brdf_lambert(glm::vec3 color)
 {
 	return color; // Divided by PI, but cancels out in the PDF
