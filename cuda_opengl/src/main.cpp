@@ -102,10 +102,9 @@ main(int argc, char* argv[])
   glfw_init(&window, window_w, window_h);
 
   // Parses selected scene using TinyObjLoader.
-  //scene::Scene scene("assets/wooden_hut_hill.scene");
-  //scene::Scene scene("assets/snow_moutain.scene");
+  scene::Scene scene("assets/wooden_hut_hill.scene");
   //scene::Scene scene("assets/crate_land.scene");
-  scene::Scene scene("assets/sss_crate.scene");
+  //scene::Scene scene("assets/sss_crate.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
   processor::GPUProcessor processor(scene, window_w, window_h);

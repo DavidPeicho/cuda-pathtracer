@@ -41,7 +41,6 @@ struct __align__(8) IntersectionData
   const scene::LightProp *light;
   float dist;
   float specular_col;
-  bool is_light;
   float ior;
 };
 
@@ -172,8 +171,8 @@ intersect(const scene::Ray& r,
       if (intersectTriangle(face, normal, uv, r, inter_dist)
         && inter_dist < intersection.dist && inter_dist > 0.0)
       {
-		inter_mat = &scene->materials.data[face.material_id];
-		intersection.ior = inter_mat->ior;
+		    inter_mat = &scene->materials.data[face.material_id];
+		    intersection.ior = inter_mat->ior;
         intersection.normal = normal;
         intersection.surface_normal = normal;
         intersection.tangent = face.tangent;
@@ -284,18 +283,18 @@ __device__ inline float3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  const int max_bounces = 1 + is_static * (static_samples + 1);
-  //const int max_bounces = 1;
+  //const int max_bounces = 1 + is_static * (static_samples + 1);
+  const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  float3 oriented_normal;
 
 	  float r1 = curand_uniform(rand_state);// *inter.specular_col;
-
 	  if (intersect(r, scene, inter))
 	  {
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+      //oriented_normal = inter.normal;
 
 		  float3 BRDF;
 
@@ -341,7 +340,6 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  d = normalize(v * sin_t * __cosf(phi) + u * __sinf(phi) * sin_t + oriented_normal * cos_t);
 
 			  r.origin += oriented_normal * inter.dist / 100.f;
-
 			  r.dir = mix(d, spec, inter.specular_col);
 		  }
 		  else
@@ -403,17 +401,8 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  }
 		  }
 
-		  //r.origin += oriented_normal * 0.03f;
-		  //throughput *= direct_light;
-
-		  //acc = glm::vec3(glm::mix(inter.diffuse_col[0], inter.specular_col, 0.4));
-		  //acc += thoughput;// *sample_lights(r, scene, PDF, inter);
-
-		  //if (is_static)
-			//acc += thoughput * sample_lights(r, scene, PDF, inter);//
-
 		  // Russian roulette
-		  if (!inter.is_light)
+		  if (!inter.light != NULL)
 		  {
 			  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
 			  if (r1 > p && b > 1)
@@ -491,6 +480,10 @@ kernel(const unsigned int width, const unsigned int height,
 
 	rad = exposure(rad);
 	rad = pow(rad, 1.0f / 2.2f);
+
+  // DEBUG
+  rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
+  // END DEBUG
 
     rgbx.r = rad.x * 255;
     rgbx.g = rad.y * 255;

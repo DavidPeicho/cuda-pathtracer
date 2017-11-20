@@ -1,6 +1,6 @@
 camera -0.3 2.4 10.0 1.0 0.0 0.0 0.0 -1.0 0.0 90.0
 
-cubemap cubemap/night.jpg
+cubemap cubemap/snow_town.jpg
 
 # pos_x pos_y pos_z r g b emission radius
 
