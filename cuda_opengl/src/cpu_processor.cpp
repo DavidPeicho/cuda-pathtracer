@@ -3,7 +3,7 @@
 
 #include "cpu_processor.h"
 
-#include "raytrace.h"
+#include "shaders/raytrace.h"
 
 namespace processor
 {

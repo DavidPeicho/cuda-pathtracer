@@ -1,20 +1,18 @@
 #pragma once
 
 #include <cuda_runtime.h>
-
-#include <glm/common.hpp>
 #include <tiny_obj_loader.h>
 
 namespace scene
 {
   template <typename T>
-  struct Buffer
+  struct __align__(16) Buffer
   {
-    size_t size;
+    unsigned int size;
     T *data;
   };
 
-  struct Texture
+  struct __align__(16) Texture
   {
     int w;
     int h;
@@ -22,21 +20,21 @@ namespace scene
     float *data;
   };
 
-  struct Face
+  struct __align__(16) Face
   {
-    glm::vec3 vertices[3];
-    glm::vec3 normals[3];
-    glm::vec2 texcoords[3];
-    glm::vec3 tangent;
-    int material_id;
+    float3 vertices[3];
+    float3 normals[3];
+    float2 texcoords[3];
+    float3 tangent;
+    unsigned int material_id;
   };
 
-  struct Mesh
+  struct __align__(16) Mesh
   {
     struct Buffer<Face> faces;
   };
 
-  struct SceneData
+  struct __align__(16) SceneData
   {
     struct Buffer<Mesh> meshes;
     struct Buffer<struct Material> materials;
@@ -46,34 +44,33 @@ namespace scene
     cudaChannelFormatDesc cubemap_desc;
   };
 
-  struct Material
+  struct __align__(8) Material
   {
     int diffuse_spec_map;
     int normal_map;
   };
 
-  struct LightProp
+  struct __align__(8) LightProp
   {
-    tinyobj::real_t color[3];
-    glm::vec3 vec;
+    float3 color;
+    float3 vec;
     float emission;
     float radius;
   };
 
-  struct Camera
+  struct __align__(16) Camera
   {
-    glm::ivec2 res;
-    glm::vec3 position;
-    glm::vec3 dir;
-    glm::vec3 u;
-    glm::vec3 v;
+    float3 position;
+    float3 dir;
+    float3 u;
+    float3 v;
     float fov_x;
   };
 
-  struct Ray
+  struct __align__(16) Ray
   {
-    glm::vec3 dir;
-    glm::vec3 origin;
+    float3 dir;
+    float3 origin;
   };
 
 }

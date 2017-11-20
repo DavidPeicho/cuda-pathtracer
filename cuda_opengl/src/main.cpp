@@ -4,11 +4,8 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <cuda_gl_interop.h>
-#include <glm/common.hpp>
 
-#define GLM_FORCE_CUDA
-#include <glm/glm.hpp>
+#include <cuda_gl_interop.h>
 
 #include <iomanip>
 #include <iostream>
@@ -18,7 +15,7 @@
 #include "driver/gpu_info.h"
 #include "driver/interop.h"
 #include "gpu_processor.h"
-#include "raytrace.h"
+
 #include "scene.h"
 #include "utils.h"
 
@@ -61,8 +58,6 @@ glfw_window_size_callback(GLFWwindow* window, int width, int height)
 
   auto& interop = processor->getInterop();
 
-	//unsigned int pow2_width = utils::nextPow2(width);
-	//unsigned int pow2_height = utils::nextPow2(height);
 	interop.setSize(width, height);
 }
 
@@ -100,16 +95,16 @@ main(int argc, char* argv[])
     //return 1;
   }
 
-  const int window_w = 512;
-  const int window_h = 512;
+  const int window_w = 960;
+  const int window_h = 540;
 
   GLFWwindow* window;
   glfw_init(&window, window_w, window_h);
 
   // Parses selected scene using TinyObjLoader.
-  //scene::Scene scene("assets/wooden_hut_hill.scene");
+  scene::Scene scene("assets/wooden_hut_hill.scene");
   //scene::Scene scene("assets/snow_moutain.scene");
-  scene::Scene scene("assets/crate_land.scene");
+  //scene::Scene scene("assets/crate_land.scene");
   std::cout << "uploading .obj scene to the GPU..." << std::endl;
 
   processor::GPUProcessor processor(scene, window_w, window_h);
@@ -169,8 +164,8 @@ main(int argc, char* argv[])
     elapsed += delta;
 	}
 
-  cudaDeviceSynchronize();
-  scene.release();
+  //cudaDeviceSynchronize();
+  //scene.release();
 
 	glfwDestroyWindow(window);
 	glfwTerminate();

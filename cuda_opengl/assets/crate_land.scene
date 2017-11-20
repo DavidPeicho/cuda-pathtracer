@@ -1,7 +1,5 @@
 camera 0.0 1.0 4.0 1.0 0.0 0.0 0.0 -1.0 0.0 90.0
 
-#cubemap 0xFF0000
-#cubemap cubemap/nebulae.jpg
 cubemap cubemap/night.jpg
 
 # pos_x pos_y pos_z r g b emission radius

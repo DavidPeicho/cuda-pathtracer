@@ -4,8 +4,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "scene_data.h"
+#include "shaders/cutils_math.h"
 
+#include "scene_data.h"
 
 namespace scene
 {
@@ -24,11 +25,11 @@ namespace scene
       getTextureId(std::string tex_rgb);
 
       int
-      getTextureId(std::string tex_rgb, glm::vec3 default_rgb);
+      getTextureId(std::string tex_rgb, float3 default_rgb);
 
       int
       getTextureId(std::string tex_rgb, std::string tex_a,
-        glm::vec3 default_rgb, float default_a);
+        float3 default_rgb, float default_a);
 
       int
       registerOrGet(std::string tex_rgb);
