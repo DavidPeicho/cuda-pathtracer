@@ -55,9 +55,16 @@ namespace driver
       void
       getSize(unsigned int& w, unsigned int& h);
 
+      inline unsigned width () const { return _width; }
+      inline unsigned half_width () const { return _half_width; }
+      inline unsigned height() const { return _height; }
+      inline unsigned half_height() const { return _half_height; }
+
     private:
       unsigned int _width;
+      unsigned int _half_width;
       unsigned int _height;
+      unsigned int _half_height;
 
       bool _allocated;
 

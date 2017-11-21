@@ -50,11 +50,11 @@ namespace driver
   GPUInfo::~GPUInfo()
   {
     GPU *adress = _gpus[0];
-    
+
     delete _gpus[0];
     // Both GPUs are pointing to the same device.
     if (adress == _gpus[1]) return;
-    
+
     delete _gpus[1];
   }
 

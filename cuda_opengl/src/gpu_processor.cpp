@@ -15,91 +15,107 @@ namespace processor
     static const float3 WORLD_DOWN_VEC = make_float3(0.0f, -1.0f, 0.0f);
   }
 
-  GPUProcessor::GPUProcessor(scene::Scene& scene, int width, int height)
-               : _scene(scene)
-               , _width(width)
-               , _height(height)
+  GPUProcessor::GPUProcessor(std::vector<std::string> scene_names, int width, int height)
+               : _scene_names(scene_names)
+    , _scene_id(0)
+    , _prev_scene_id(0)
                , _interop(width, height)
                , _d_temporal_framebuffer(nullptr)
                , _moved(false)
-               , _cam_speed(1.0f)
   {
-    //cudaSetDevice(_gpu_info.getCUDAGPU().device_id);
-    // Logs information about the GPUs.
-    std::cout << _gpu_info.getProfile() << std::endl;
-
-    // Logs information about the GPUs, allows to see
-    // how much memory is consummed by the obj scene.
-    std::cout << _gpu_info.getProfile() << std::endl;
-
     cudaStreamCreateWithFlags(&_stream, cudaStreamDefault);
-    cudaMalloc(&_d_temporal_framebuffer, _width * _height * sizeof(float3));
+    cudaMalloc(&_d_temporal_framebuffer, width * height * sizeof(float3));
 
     // Initializes all keys to released
-    for (size_t i = 0; i < 65536; ++i)
-      _keys[i] = false;
-  }
+    for (size_t i = 0; i < 65536; ++i) _keys[i] = false;
 
-  bool
-  GPUProcessor::init()
-  {
-    // Uploads scene for GPU usage
-    _scene.upload(false);
-    return _scene.ready();
+    // Creates associated files scenes
+    for (const auto &file : scene_names) _scenes.emplace_back(file);
   }
 
   void
-  GPUProcessor::run(float delta)
+  GPUProcessor::init()
   {
-    unsigned int pow2_width = 0;
-    unsigned int pow2_height = 0;
-    _interop.getSize(pow2_width, pow2_height);
+    std::cout << "Uploading scenes to VRAM...\n"
+              << "This operation may take a few seconds.\n" << std::endl;
 
-    auto *cam = _scene.getCamPointer();
+    // Logs information about the GPUs.
+    std::cout << _gpu_info.getProfile() << std::endl;
+
+    // Uploads scene for GPU usage
+    for (auto& scene : _scenes) scene.upload(&_camera);
+
+    std::cout << "Uploading has terminated!" << std::endl;
+    // Logs information about the GPUs.
+    std::cout << _gpu_info.getProfile() << std::endl;
+  }
+
+  void
+  GPUProcessor::update(float delta)
+  {
+    // Updates cam rotation
+    _camera.u = cross(WORLD_DOWN_VEC, _camera.dir);
+    _camera.v = cross(_camera.dir, _camera.u);
+
+    // Updates cam position
+    if (this->isKeyPressed(GLFW_KEY_W))
+      _camera.position += _camera.dir * _actual_speed * delta;
+    if (this->isKeyPressed(GLFW_KEY_S))
+      _camera.position -= _camera.dir * _actual_speed * delta;
+    if (this->isKeyPressed(GLFW_KEY_A))
+      _camera.position -= _camera.u * _actual_speed * delta;
+    if (this->isKeyPressed(GLFW_KEY_D))
+      _camera.position += _camera.u * _actual_speed * delta;
+
+    if (this->isKeyPressed(GLFW_KEY_LEFT_SHIFT))
+      _actual_speed += 0.05;
+    else
+      _actual_speed = _camera.speed;
+  }
+
+  void
+  GPUProcessor::render()
+  {
+    if (_scenes.size() == 0) return;
+
+    if (_prev_scene_id != _scene_id)
+    {
+      cudaDeviceSynchronize();
+      _prev_scene_id = _scene_id;
+      std::cout << "toto" << std::endl;
+    }
+
+    const auto *cpu_scene = _scenes[_scene_id].getScenePointer();
+    const auto *gpu_scene = _scenes[_scene_id].getUploadedScenePointer();
+
+    if (_scene_id == 1)
+      //std::cout << "toto" << std::endl;
+
+    if (gpu_scene == nullptr || cpu_scene == nullptr) return;
+
     cudaError_t cuda_err = _interop.map(_stream);
-
-    const auto *cpu_scene = _scene.getScenePointer();
-    const auto *gpu_scene = _scene.getUploadedScenePointer();
-
-    raytrace(_interop.getArray(), cpu_scene, gpu_scene, cam, _width,
-        _height, _stream, _d_temporal_framebuffer, _moved);
-
+    raytrace(
+      _interop.getArray(), cpu_scene, gpu_scene, &_camera,
+      _interop.width(), _interop.height(), _stream,
+      _d_temporal_framebuffer, _moved
+    );
     cuda_err = _interop.unmap(_stream);
 
     this->setMoved(false);
 
-    // Updates cam rotation
-    cam->u = cross(WORLD_DOWN_VEC, cam->dir);
-    cam->v = cross(cam->dir, cam->u);
-
-    // Updates cam position
-    if (this->isKeyPressed(GLFW_KEY_W)) cam->position += cam->dir * _cam_speed * delta;
-    if (this->isKeyPressed(GLFW_KEY_S)) cam->position -= cam->dir * _cam_speed * delta;
-    if (this->isKeyPressed(GLFW_KEY_A)) cam->position -= cam->u * _cam_speed * delta;
-    if (this->isKeyPressed(GLFW_KEY_D)) cam->position += cam->u * _cam_speed * delta;
-
-    // Resets camera orientation
-    if (this->isKeyPressed(GLFW_KEY_SPACE))
-    {
-      std::cout << cam->dir.x << " | " << cam->dir.y << " | " << cam->dir.z << std::endl;
-
-      cam->dir.x = 0.0;
-      cam->dir.y = 0.0;
-      cam->dir.z = -1.0;
-      _angle.x = 0.0;
-      _angle.y = M_PI;
-    }
-
-    if (this->isKeyPressed(GLFW_KEY_LEFT_SHIFT))
-    {
-      std::cout << cam->position.x << " | " << cam->position.y << " | " << cam->position.z << std::endl;
-      _cam_speed += 0.05;
-    }
-    else
-      _cam_speed = 1.0;
-
     _interop.blit();
     _interop.swap();
+  }
+
+  void
+  GPUProcessor::resize(unsigned int w, unsigned int h)
+  {
+    _interop.setSize(w, h);
+
+    if (_d_temporal_framebuffer != nullptr)
+      cudaFree(_d_temporal_framebuffer);
+
+    cudaMalloc(&_d_temporal_framebuffer, h * w * sizeof(float3));
   }
 
   void

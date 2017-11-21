@@ -8,7 +8,7 @@
 #include <stdbool.h>
 
 #include "../utils.h"
-#include "../scene_data.h"
+#include "../scene/scene_data.h"
 
 #include <iostream>
 
@@ -292,6 +292,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 	  float r1 = curand_uniform(rand_state);// *inter.specular_col;
 	  if (intersect(r, scene, inter))
 	  {
+      return inter.diffuse_col;
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
       //oriented_normal = inter.normal;
@@ -411,7 +412,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  throughput *= __fdividef(1.0f, p);
 		  }
 	  }
-	  else
+	  /*else
 	  {
 		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
 		  acc += make_float3(val.x, val.y, val.z) * throughput;
@@ -421,7 +422,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  return acc;
 
 		  throughput *= __fdividef(1.0f, p);
-	  }
+	  }*/
   }
 
   return acc;
@@ -522,11 +523,11 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
 
 	cudaBindSurfaceToArray(surf, array);
 
-  cubemap_ref.addressMode[0] = cudaAddressModeWrap;
+  /*cubemap_ref.addressMode[0] = cudaAddressModeWrap;
   cubemap_ref.addressMode[1] = cudaAddressModeWrap;
   cubemap_ref.filterMode = cudaFilterModeLinear;
   cubemap_ref.normalized = true;
-  cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);
+  cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);*/
 
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32

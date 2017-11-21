@@ -48,7 +48,7 @@ namespace scene
   {
     int diffuse_spec_map;
     int normal_map;
-	float ior;
+	  float ior;
   };
 
   struct __align__(8) LightProp
@@ -59,13 +59,14 @@ namespace scene
     float radius;
   };
 
-  struct __align__(16) Camera
+  struct __align__(8) Camera
   {
     float3 position;
     float3 dir;
     float3 u;
     float3 v;
     float fov_x;
+    float speed;
   };
 
   struct __align__(16) Ray

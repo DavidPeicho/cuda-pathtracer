@@ -18,15 +18,14 @@
 
 #include <unordered_map>
 
-#include "driver/cuda_helper.h"
-#include "material_loader.h"
+#include "../driver/cuda_helper.h"
+#include "../material_loader.h"
+#include "../texture_utils.h"
+#include "../shaders/cutils_math.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "scene.h"
 
-#include "shaders/cutils_math.h"
-
-#include "texture_utils.h"
 
 namespace scene
 {
@@ -100,10 +99,18 @@ namespace scene
 
       cam.u = normalize(cam.u);
       cam.v = normalize(cam.v);
+      cam.dir = cross(cam.u, cam.v);
 
       iss >> cam.fov_x;
       cam.fov_x = (cam.fov_x * M_PI) / 180.0;
-      cam.dir = cross(cam.u, cam.v);
+
+      // Parses the speed. If no speed is provided, we will use
+      // 1.0 by default.
+      if (iss.peek() == std::char_traits<char>::eof())
+        cam.speed = 1.0;
+      else
+        iss >> cam.speed;
+
       return true;
     }
 
@@ -113,7 +120,11 @@ namespace scene
       std::ifstream file;
       file.open(filename);
       if (!file.is_open())
-        throw std::runtime_error("parse_scene(): failed to open '" + filename + "'");
+      {
+        std::cerr << "arttracer: parse_scene(): failed to open '"
+                  << filename << "'" << std::endl;
+        return;
+      }
 
       // Creates default camera, used when no camera is found in the .scene file
       cam.u = make_float3(1.0, 0.0, 0.0);
@@ -138,38 +149,60 @@ namespace scene
         {
           LightProp plight;
           if (!parse_double3(plight.vec, iss))
-            throw std::runtime_error("parse_scene(): error parsing p_light vector.");
+          {
+            std::cerr << "parse_scene(): error parsing p_light pos" << std::endl;
+            continue;
+          }
           if (!parse_double3(plight.color, iss))
-            throw std::runtime_error("parse_scene(): error parsing p_light color.");
+          {
+            std::cerr << "parse_scene(): error parsing p_light color" << std::endl;
+            continue;
+          }
           if (iss.peek() == std::char_traits<char>::eof())
-            throw std::runtime_error("parse_scene(): error parsing p_light emission.");
+          {
+            std::cerr << "parse_scene(): error parsing p_light emission" << std::endl;
+            continue;
+          }
           iss >> plight.emission;
           if (iss.peek() == std::char_traits<char>::eof())
-            throw std::runtime_error("parse_scene(): error parsing p_light radius.");
+          {
+            std::cerr << "parse_scene(): error parsing p_light radius" << std::endl;
+            continue;
+          }
           iss >> plight.radius;
           light_vec.push_back(plight);
         }
         else if (token == "cubemap")
         {
           if (iss.peek() == std::char_traits<char>::eof())
-            throw std::runtime_error("parse_scene(): error parsing cubemap file name.");
+          {
+            std::cerr << "parse_scene(): error parsing cubemap" << std::endl;
+            continue;
+          }
           iss >> cubemapfile;
         }
         else if (token == "scene")
         {
           if (iss.peek() == std::char_traits<char>::eof())
-            throw std::runtime_error("parse_scene(): error parsing scene file name.");
+          {
+            std::cerr << "parse_scene(): error parsing scene file name" << std::endl;
+            continue;
+          }
+
           iss >> objfile;
         }
         else if (token == "camera")
         {
           if (!parse_camera(cam, iss))
-            throw std::runtime_error("parse_scene(): error parsing the camera.");
+          {
+            std::cerr << "parse_scene(): error parsing the camera" << std::endl;
+            continue;
+          }
         }
       }
 
-      if (light_vec.size() == 0)
-        return;
+      out_scene.lights.size = 0;
+      if (light_vec.size() == 0) return;
 
       // Copies lights back to CUDA
       const LightProp *lights = &light_vec[0];
@@ -395,32 +428,7 @@ namespace scene
           std::cerr << "arttracer: cubemap loading fail: " << error << std::endl;
           img = createUnitTexture(NB_COMP, DEFAULT_COLOR, NB_FACES);
         }
-
-        //fail to load cubemap :
       }
-      /*float *tmp = new float[6 * 2 * 2 * 4];
-      size_t nb_bytes = 2 * 2 * 4;
-      for (size_t i = 0; i < nb_bytes; i += 4)
-      {
-        tmp[0 * nb_bytes + i] = 1.0;
-        tmp[0 * nb_bytes + i + 1] = 0;
-        tmp[0 * nb_bytes + i + 2] = 0;
-      }
-      // FACE 2 +y
-      for (size_t i = 0; i < nb_bytes; i += 4)
-      {
-        tmp[2 * nb_bytes + i] = 0;
-        tmp[2 * nb_bytes + i + 1] = 1.0;
-        tmp[2 * nb_bytes + i + 2] = 0;
-      }
-      // FACE 4 +z
-      for (size_t i = 0; i < nb_bytes; i += 4)
-      {
-        tmp[4 * nb_bytes + i] = 0;
-        tmp[4 * nb_bytes + i + 1] = 0;
-        tmp[4 * nb_bytes + i + 2] = 1.0;
-      }*/
-      // END DEBUG
 
       out_scene->cubemap_desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
       cudaThrowError();
@@ -460,7 +468,7 @@ namespace scene
   { }
 
   void
-  Scene::upload(bool is_cpu)
+  Scene::upload(scene::Camera *camera)
   {
     if (_uploaded)
       return;
@@ -472,7 +480,6 @@ namespace scene
     // _sceneData is allocated on the heap,
     // and allows to handle cudaMalloc & cudaFree
     _scene_data = new SceneData;
-    _camera = new Camera;
 
     std::string objfilepath;
     std::string cubemap_path;
@@ -480,7 +487,9 @@ namespace scene
     std::string mtl_dir = "";
     std::string full_obj_path = "";
 
-    parse_scene(_filepath, *_scene_data, *_camera, objfilepath, cubemap_path);
+    parse_scene(_filepath, *_scene_data, _init_camera, objfilepath, cubemap_path);
+
+    if (camera) *camera = _init_camera;
 
     std::string::size_type pos = _filepath.find_last_of('/');
     if (pos != std::string::npos)
@@ -495,21 +504,25 @@ namespace scene
     // Extracts basedir to find MTL if any.
     pos = objfilepath.find_last_of('/');
     if (pos != std::string::npos)
-    {
       mtl_dir = base_dir + "/" + objfilepath.substr(0, pos) + "/";
-    }
 
     _ready = tinyobj::LoadObj(&attrib, &shapes,
         &materials, &_load_error, full_obj_path.c_str(), mtl_dir.c_str());
 
     if (!_ready)
     {
+      std::cerr << "arttracer: Scene.upload(): fail to load OBJ.\n"
+                << _load_error << std::endl;
+
       delete _scene_data;
-      delete _camera;
+
+      _scene_data = nullptr;
+      _d_scene_data = nullptr;
       return;
     }
 
     upload_gpu(shapes, materials, attrib, cubemap_path, mtl_dir);
+
     _uploaded = true;
   }
 
@@ -587,7 +600,6 @@ namespace scene
     // THIRD: we can now delete the struct pointer.
     cudaFree(_d_scene_data);
 
-    delete _camera;
     delete _scene_data;
 
     _uploaded = false;

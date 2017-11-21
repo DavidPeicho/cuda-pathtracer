@@ -4,9 +4,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "scene/scene_data.h"
 #include "shaders/cutils_math.h"
-
-#include "scene_data.h"
 
 namespace scene
 {
