@@ -283,8 +283,8 @@ __device__ inline float3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
-  //const int max_bounces = 1 + is_static * (static_samples + 1);
-  const int max_bounces = 1;
+  const int max_bounces = 1 + is_static * (static_samples + 1);
+  //const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  float3 oriented_normal;
@@ -292,9 +292,9 @@ __device__ inline float3 radiance(scene::Ray& r,
 	  float r1 = curand_uniform(rand_state);// *inter.specular_col;
 	  if (intersect(r, scene, inter))
 	  {
+		  //inter.normal = inter.surface_normal;
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
-      //oriented_normal = inter.normal;
 
 		  float3 BRDF;
 
@@ -304,28 +304,23 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 		  // Oren-Nayar diffuse
 		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
-		  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
-		  if (inter.light != NULL)
-		  {
-			  acc += inter.light->emission * throughput;
-
-			  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
-			  if (r1 > p && b > 1)
-				  return acc;
-
-			  throughput *= __fdividef(1.0f, p);
-
-			  BRDF = make_float3(inter.light->color.x, inter.light->color.y, inter.light->color.z);
-		  }
 
 		  //Lambert BRDF/PDF
-		  float PDF = pdf_lambert(); // Divided by PI
-		  float3 direct_light = BRDF / PDF;
-
-		  float3 d;
-		  float3 spec = reflect(r.dir, oriented_normal);
-		  if (inter.ior == 1.0f)
+		  float3 spec = reflect(r.dir, inter.normal);
+			  float PDF = pdf_lambert(); // Divided by PI
+			  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
+			  float3 direct_light = BRDF / PDF;
+		  if (inter.ior == 1.0f || inter.light != NULL)
 		  {
+
+			  if (inter.light != NULL)
+			  {
+				  BRDF = make_float3(inter.light->color.x, inter.light->color.y, inter.light->color.z);
+
+				  acc += BRDF * inter.light->emission * throughput;
+
+				  //throughput *= BRDF / PDF;
+			  }
 			  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
 
 			  //r1 *= inter.specular_col;
@@ -337,16 +332,22 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  float3 v = cross(oriented_normal, u);
 
 			  //Diffuse hemishphere reflection
-			  d = normalize(v * sin_t * __cosf(phi) + u * __sinf(phi) * sin_t + oriented_normal * cos_t);
+			  float3 d = normalize(v * sin_t * __cosf(phi) + u * __sinf(phi) * sin_t + oriented_normal * cos_t);
 
-			  r.origin += oriented_normal * inter.dist / 100.f;
+			  r.origin += r.dir * inter.dist;
+
 			  r.dir = mix(d, spec, inter.specular_col);
+
+			  r.origin += r.dir * 0.03f;
+
+
+			  throughput *= direct_light;
 		  }
 		  else
 		  {
 			  // Transmision
 			  float n1 = 1.0f; // sin theta2
-			  float n2 = 1.5f; // sin theta1
+			  float n2 = inter.ior; // sin theta1
 			  float c1 = dot(oriented_normal, r.dir);
 			  bool entering = dot(inter.normal, oriented_normal) > 0;
 			  float eta = entering ? n1 / n2 : n2 / n1;
@@ -356,8 +357,6 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  if (c2_term < 0.0f)
 			  {
 				  r.origin += oriented_normal * inter.dist / 100.f;
-
-				  throughput *= direct_light;
 
 				  //return glm::vec3(0.0f, 1.0f, 0.0f);
 				  r.dir = spec;
@@ -369,12 +368,10 @@ __device__ inline float3 radiance(scene::Ray& r,
 				  float c2 = __fsqrt_rn(c2_term);
 				  float3 T = normalize(eta * r.dir + (eta * c1 - c2) * oriented_normal);
 
-				  float f_cos_theta = 1.0f - (entering ? c1 : dot(T, inter.normal));
+				  float f_cos_theta = 1.0f - (entering ? -c1 : dot(T, inter.normal));
 				  f_cos_theta = powf(cos_theta, 5.0f);
 				  // Fresnel Schlick
 				  float f_r = R0 + (1.0f - R0) * f_cos_theta;
-
-				  //return glm::vec3(f_r);
 
 				  if (curand_uniform(rand_state) < 0.25f)
 				  {
@@ -384,7 +381,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 					  r.origin += oriented_normal * inter.dist / 100.f;
 
-					  r.dir = spec;// glm::mix(d, spec, inter.specular_col);
+					  r.dir = spec;// mix(d, spec, inter.specular_col);
 				  }
 				  else
 				  {
@@ -400,28 +397,19 @@ __device__ inline float3 radiance(scene::Ray& r,
 				  }
 			  }
 		  }
-
-		  // Russian roulette
-		  if (!inter.light != NULL)
-		  {
-			  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
-			  if (r1 > p && b > 1)
-				  return acc;
-
-			  throughput *= __fdividef(1.0f, p);
-		  }
 	  }
 	  else
 	  {
 		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
 		  acc += make_float3(val.x, val.y, val.z) * throughput;
-
-		  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
-		  if (r1 > p && b > 1)
-			  return acc;
-
-		  throughput *= __fdividef(1.0f, p);
 	  }
+
+	  // Russian roulette
+	  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
+	  if (r1 > p && b > 1)
+		  return acc;
+
+	  throughput *= __fdividef(1.0f, p);
   }
 
   return acc;
@@ -480,10 +468,6 @@ kernel(const unsigned int width, const unsigned int height,
 
 	rad = exposure(rad);
 	rad = pow(rad, 1.0f / 2.2f);
-
-  // DEBUG
-  rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-  // END DEBUG
 
     rgbx.r = rad.x * 255;
     rgbx.g = rad.y * 255;
