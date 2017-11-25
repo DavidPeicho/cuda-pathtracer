@@ -158,7 +158,7 @@ main(int argc, char* argv[])
   // Creates the processor in charge of loading the assets, by creating
   // the scenes from the command line, and running the kernel each loop.
   // DEBUG
-  const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
+  const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "crate_land.scene" };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
   auto cubemap = buildCubemapPath(std::string(toto[CUBEMAP_IDX]), asset_folder);

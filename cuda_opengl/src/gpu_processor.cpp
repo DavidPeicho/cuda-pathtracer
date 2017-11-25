@@ -247,14 +247,13 @@ namespace processor
   {
     if (_scenes.size() == 0) return;
 
+    const auto *gpu_scene = _scenes[_scene_id].getUploadedScenePointer();
     if (_prev_scene_id != _scene_id)
     {
-      cudaDeviceSynchronize();
+      //cudaDeviceSynchronize();
       _prev_scene_id = _scene_id;
-      std::cout << "toto" << std::endl;
+      std::cout << gpu_scene << std::endl;
     }
-
-    const auto *gpu_scene = _scenes[_scene_id].getUploadedScenePointer();
 
     if (gpu_scene == nullptr) return;
 
