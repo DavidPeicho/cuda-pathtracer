@@ -71,6 +71,8 @@ namespace scene
     float3 v;
     float fov_x;
     float speed;
+    float aperture;
+    float focus_dist;
   };
 
   struct __align__(16) Ray

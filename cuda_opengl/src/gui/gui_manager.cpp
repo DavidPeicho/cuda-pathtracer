@@ -60,6 +60,9 @@ namespace gui
     ImGui::InputFloat("x", &cam.position.x, -MAX_POS, MAX_POS);
     ImGui::InputFloat("y", &cam.position.y, -MAX_POS, MAX_POS);
     ImGui::InputFloat("z", &cam.position.z, -MAX_POS, MAX_POS);
+    ImGui::Separator();
+    ImGui::SliderFloat("Aperture size", &cam.aperture, 1.0f, 10.0f);
+    ImGui::SliderFloat("Focus distance", &cam.focus_dist, 0.001f, 1.0f);
     ImGui::End();
   }
 
