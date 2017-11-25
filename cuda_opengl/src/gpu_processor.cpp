@@ -151,7 +151,7 @@ namespace processor
       cudaMemcpy3D(&myparms);
       cudaThrowError();
 
-      delete img;
+      delete[] img;
       if (loaded) stbi_image_free(loaded);
     }
   }

@@ -133,7 +133,7 @@ intersectTriangle(const scene::Face &face, float3 &out_normal,
 }
 
 __device__ bool
-intersectSphere(const scene::Ray &r, const scene::LightProp & const light, float& t)
+intersectSphere(const scene::Ray &r, const scene::LightProp & light, float& t)
 {
     static const float epsilon = 0.01f;
 
@@ -188,7 +188,7 @@ intersect(const scene::Ray& r,
   for (unsigned l = 0; l < scene->lights.size; ++l)
   {
     // Checks lights intersection
-    const scene::LightProp &const light = scene->lights.data[l];
+    const scene::LightProp & light = scene->lights.data[l];
     if (intersectSphere(r, light, inter_dist)
         && inter_dist < intersection.dist && inter_dist >= 0.0)
     {
@@ -235,8 +235,9 @@ intersect(const scene::Ray& r,
 	return intersection.dist < MAX_DIST;
 }
 
+#ifndef M_PI
 #define M_PI 3.14159265359f
-
+#endif
 /*__device__ inline glm::vec3
 sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
 			  float PDF, const IntersectionData& inter)
@@ -464,7 +465,7 @@ kernel(const unsigned int width, const unsigned int height,
 
 	int is_static = !moved;
 	int static_samples = 1;
-	int samples = 2 + is_static * static_samples;
+	/*int samples = 2 + is_static * static_samples;*/
 
     float3 rad = make_float3(0.0f);
 	//for (int i = 0; i < samples; i++)

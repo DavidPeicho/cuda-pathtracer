@@ -27,35 +27,37 @@ static bool g_mouse_trapped = true;
 static void
 glfw_init(GLFWwindow** window, const int width, const int height)
 {
-	if (!glfwInit()) exit(EXIT_FAILURE);
+  if (!glfwInit())
+    exit(EXIT_FAILURE);
 
-	glfwWindowHint(GLFW_DEPTH_BITS, 0);
-	glfwWindowHint(GLFW_STENCIL_BITS, 0);
+  glfwWindowHint(GLFW_DEPTH_BITS, 0);
+  glfwWindowHint(GLFW_STENCIL_BITS, 0);
 
-	glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
+  glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
 
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	*window = glfwCreateWindow(width, height, "GLFW / CUDA Interop", NULL, NULL);
+  *window = glfwCreateWindow(width, height, "GLFW / CUDA Interop", NULL, NULL);
 
-	if (*window == NULL)
-	{
-		glfwTerminate();
-		exit(EXIT_FAILURE);
-	}
+  if (*window == NULL)
+  {
+    glfwTerminate();
+    exit(EXIT_FAILURE);
+  }
 
-	glfwMakeContextCurrent(*window);
-	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	glfwSwapInterval(0);
+  glfwMakeContextCurrent(*window);
 
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+  gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+
+  glfwSwapInterval(0);
+
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 }
 
-static
-void
+static void
 glfw_window_size_callback(GLFWwindow* window, int width, int height)
 {
   processor::GPUProcessor* const processor =
@@ -68,6 +70,9 @@ void
 glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
   static char keys[1024];
+
+  (void) scancode;
+  (void) mods;
 
   processor::GPUProcessor* const processor =
     (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
@@ -121,7 +126,7 @@ buildCubemapPath(const std::string& arg, const std::string& asset_folder)
   if (idx != std::string::npos)
   {
     auto ext = arg.substr(idx + 1);
-    if (!ext.empty() && ext == "jpg" || ext == "tga" || ext == "png")
+    if (!ext.empty() && (ext == "jpg" || ext == "tga" || ext == "png"))
       return cubemap = asset_folder + "/" + arg;
   }
 
@@ -137,6 +142,7 @@ main(int argc, char* argv[])
     std::cerr << "usage: artracer ASSET_FOLDER [CUBEMAP] [SCENE 1] [SCENE2] ..." << std::endl;
     //return 1;
   }
+  (void) argv;
 
   constexpr int ASSET_FOLDER_IDX = 1;
   constexpr int WINDOW_W = 960;
@@ -146,6 +152,7 @@ main(int argc, char* argv[])
   glfw_init(&window, WINDOW_W, WINDOW_H);
 
   gui::GUIManager::inst()->init(window);
+  //scene::Scene scene(argv[1]);
 
   int width = 0;
   int height = 0;
@@ -158,7 +165,7 @@ main(int argc, char* argv[])
   // Creates the processor in charge of loading the assets, by creating
   // the scenes from the command line, and running the kernel each loop.
   // DEBUG
-  const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "crate_land.scene" };
+  const char* toto[] = { "toto", "cuda_opengl/assets", "cubemap/night.jpg", "crate_land.scene", "crate_land.scene" };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
   auto cubemap = buildCubemapPath(std::string(toto[CUBEMAP_IDX]), asset_folder);
@@ -180,8 +187,8 @@ main(int argc, char* argv[])
   double delta = 0.0;
   double elapsed = 0.0;
 
-	while (!glfwWindowShouldClose(window))
-	{
+  while (!glfwWindowShouldClose(window))
+  {
     curr_time = glfwGetTime();
     delta = curr_time - last_time;
     last_time = curr_time;
@@ -220,7 +227,7 @@ main(int argc, char* argv[])
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
-	cudaDeviceReset();
+  cudaDeviceReset();
 
 	exit(EXIT_SUCCESS);
 }

@@ -9,7 +9,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
-#include <glad\glad.h>
+#include <glad/glad.h>
 
 // GL3W/GLFW
 #include <GLFW/glfw3.h>

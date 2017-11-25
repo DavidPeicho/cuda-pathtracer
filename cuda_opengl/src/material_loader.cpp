@@ -1,5 +1,3 @@
-#pragma once
-
 #include <algorithm>
 #include <cstring>
 
@@ -151,7 +149,7 @@ namespace scene
   MaterialLoader::~MaterialLoader()
   {
     size_t s = _textures.size();
-    for (size_t i = 0; i < s; ++i) delete _textures[i].data;
+    for (size_t i = 0; i < s; ++i) delete[] _textures[i].data;
 
     // Some textures were directly added into the '_textures' vector.
     // These textures were not packed so no intermediary allocation was made.
@@ -161,7 +159,7 @@ namespace scene
     {
       // Texture has been loaded but not used
       // directly by itself, it should be freed.
-      if (!_packed_tex.count(pair.first)) delete pair.second.data;
+      if (!_packed_tex.count(pair.first)) delete[] pair.second.data;
     }
   }
 

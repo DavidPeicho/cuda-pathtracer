@@ -39,7 +39,7 @@ namespace gui
   GUIManager::info(int& scene_id, const std::vector<std::string>& items)
   {
     ImGui::Begin("Info", NULL, ImGuiWindowFlags_AlwaysAutoResize);
-    ImGui::Text("FPS: %.1f", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::Text("FPS: %.1f", 1000.0f / ImGui::GetIO().Framerate);
     float height = ImGui::GetWindowHeight();
     ImGui::ListBox("Loaded scenes", &scene_id, vectorGetter, (void*)&items, (int)items.size(), -1);
     ImGui::End();
@@ -51,7 +51,7 @@ namespace gui
   GUIManager::camera(scene::Camera& cam, float h_offset)
   {
     constexpr float MAX_POS = 1000.0f;
-
+    (void) h_offset;
     //ImGui::SetNextWindowPos(ImVec2(0, 100), ImGuiCond_Once);
     ImGui::Begin("Camera");
     ImGui::SliderFloat("Speed", &cam.speed, 1.0f, 10.0f);

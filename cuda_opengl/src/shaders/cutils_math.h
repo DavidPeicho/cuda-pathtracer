@@ -39,27 +39,27 @@ struct __align__(16) mat3
 // host implementations of CUDA functions
 ////////////////////////////////////////////////////////////////////////////////
 
-inline float fminf_d(float a, float b)
+inline __host__ __device__ float fminf_d(float a, float b)
 {
   return a < b ? a : b;
 }
 
-inline float fmaxf_d(float a, float b)
+inline __host__ __device__ float fmaxf_d(float a, float b)
 {
   return a > b ? a : b;
 }
 
-inline int max_d(int a, int b)
+inline __host__ __device__ int max_d(int a, int b)
 {
   return a > b ? a : b;
 }
 
-inline int min_d(int a, int b)
+inline __host__ __device__ int min_d(int a, int b)
 {
   return a < b ? a : b;
 }
 
-inline float rsqrtf_d(float x)
+inline __host__ __device__ float rsqrtf_d(float x)
 {
     return 1.0f / sqrtf(x);
 }

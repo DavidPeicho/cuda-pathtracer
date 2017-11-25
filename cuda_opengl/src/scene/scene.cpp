@@ -425,7 +425,7 @@ namespace scene
     cudaError_t e = cudaGetLastError();
 
     for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
-    delete textures;
+    delete[] textures;
 
     // SECOND: Frees meshes by first retrieving pointer from the GPU,
     // and then calling cudaFree to free GPU pointed adress.
@@ -441,7 +441,7 @@ namespace scene
       const Mesh& mesh = meshes[i];
       cudaFree(mesh.faces.data);
     }
-    delete meshes;
+    delete[] meshes;
 
     // Frees materials
     cudaFree(_scene_data->materials.data);
