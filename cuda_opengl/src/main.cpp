@@ -10,69 +10,85 @@
 #include <iomanip>
 #include <iostream>
 
-#include "cpu_processor.h"
 #include "driver/cuda_helper.h"
 #include "driver/gpu_info.h"
 #include "driver/interop.h"
 #include "gpu_processor.h"
 
-#include "scene.h"
+#include "gui/gui_manager.h"
+
+#include "scene/scene.h"
 #include "utils.h"
+
+constexpr unsigned int CUBEMAP_IDX = 2;
+
+static bool g_mouse_trapped = true;
 
 static void
 glfw_init(GLFWwindow** window, const int width, const int height)
 {
-	if (!glfwInit()) exit(EXIT_FAILURE);
+	if (!glfwInit())
+  {
+    std::cerr << "artracer: failed to initialize GLFW" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
-	glfwWindowHint(GLFW_DEPTH_BITS, 0);
-	glfwWindowHint(GLFW_STENCIL_BITS, 0);
+  glfwWindowHint(GLFW_DEPTH_BITS, 0);
+  glfwWindowHint(GLFW_STENCIL_BITS, 0);
 
-	glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
+  glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
 
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	*window = glfwCreateWindow(width, height, "GLFW / CUDA Interop", NULL, NULL);
+  *window = glfwCreateWindow(width, height, "GLFW / CUDA Interop", NULL, NULL);
 
 	if (*window == NULL)
 	{
+    std::cerr << "artracer: failed to open GLFW window" << std::endl;
 		glfwTerminate();
 		exit(EXIT_FAILURE);
 	}
 
-	glfwMakeContextCurrent(*window);
-	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	glfwSwapInterval(0);
-
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+  glfwMakeContextCurrent(*window);
+  gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+  glfwSwapInterval(0);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 }
 
-static
-void
+static void
 glfw_window_size_callback(GLFWwindow* window, int width, int height)
 {
 	processor::GPUProcessor* const processor =
 		(processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
 
-	auto& interop = processor->getInterop();
-
-	interop.setSize(width, height);
+  processor->resize(width, height);
 }
 
 void
 glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	processor::GPUProcessor* const processor =
-		(processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
+  static char keys[1024];
+
+  (void) scancode;
+  (void) mods;
+
+  processor::GPUProcessor* const processor =
+    (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
 
 	if (key < 0 || key >= 1024) return;
 
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
+  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS && !keys[GLFW_KEY_ESCAPE])
+  {
+    g_mouse_trapped = !g_mouse_trapped;
+    glfwSetInputMode(window, GLFW_CURSOR, g_mouse_trapped ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_NORMAL);
+  }
+  else
+    processor->setKeyState(key, action != GLFW_RELEASE);
 
-	processor->setKeyState(key, action != GLFW_RELEASE);
+  keys[key] = action != GLFW_RELEASE;
 }
 
 void
@@ -81,96 +97,137 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	processor::GPUProcessor* const processor =
 		(processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
 
+  if (!g_mouse_trapped) return;
+
 	processor->setMoved(true);
 	processor->setMousePos((float)xpos, (float)ypos);
+}
+
+std::vector<std::string>
+buildScenesList(int argc, const char *argv[], const std::string& folder, unsigned int start)
+{
+  std::vector<std::string> scenes;
+
+  int nb_scenes = argc - start + 1;
+  for (int i = 0; i < nb_scenes ; ++i)
+  {
+    std::string file = folder + "/" + argv[i + start];
+    scenes.push_back(file);
+  }
+
+  return scenes;
+}
+
+std::string
+buildCubemapPath(const std::string& arg, const std::string& asset_folder)
+{
+  std::string cubemap;
+
+  auto idx = arg.find_last_of(".\\");
+  if (idx != std::string::npos)
+  {
+    auto ext = arg.substr(idx + 1);
+    if (!ext.empty() && (ext == "jpg" || ext == "tga" || ext == "png"))
+      return cubemap = asset_folder + "/" + arg;
+  }
+
+  return utils::isHexa(arg) ? arg : cubemap;
 }
 
 int
 main(int argc, char* argv[])
 {
-	if (argc < 2)
-	{
-		std::cerr << "artracer: missing scene argument.\n";
-		std::cerr << "usage: artracer [OBJ SCENE]" << std::endl;
-		//return 1;
-	}
+  if (argc < 3)
+  {
+    std::cerr << "artracer: missing scene argument.\n";
+    std::cerr << "usage: artracer ASSET_FOLDER [CUBEMAP] [SCENE 1] [SCENE2] ..." << std::endl;
+    //return 1;
+  }
+  (void) argv;
 
-	const int window_w = 960;
-	const int window_h = 540;
+  constexpr int ASSET_FOLDER_IDX = 1;
+  constexpr int WINDOW_W = 960;
+  constexpr int WINDOW_H = 540;
 
-	GLFWwindow* window;
-	glfw_init(&window, window_w, window_h);
+  GLFWwindow* window;
+  glfw_init(&window, WINDOW_W, WINDOW_H);
 
-	// Parses selected scene using TinyObjLoader.
-	//scene::Scene scene("assets/wooden_hut_hill.scene");
-	//scene::Scene scene("assets/crate_land.scene");
-	scene::Scene scene("assets/sss_crate.scene");
-	std::cout << "uploading .obj scene to the GPU..." << std::endl;
+  gui::GUIManager::inst()->init(window);
+  //scene::Scene scene(argv[1]);
 
-	processor::GPUProcessor processor(scene, window_w, window_h);
+  int width = 0;
+  int height = 0;
+  glfwGetFramebufferSize(window, &width, &height);
+  glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
+  glfwSetCursorPosCallback(window, glfw_mouse_callback);
+  glfwSetKeyCallback(window, glfw_key_callback);
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
-	int width = 0;
-	int height = 0;
-	glfwGetFramebufferSize(window, &width, &height);
+  // Creates the processor in charge of loading the assets, by creating
+  // the scenes from the command line, and running the kernel each loop.
+  // DEBUG
+  const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
+  // END DEBUG
+  auto asset_folder = toto[ASSET_FOLDER_IDX];
+  auto cubemap = buildCubemapPath(std::string(toto[CUBEMAP_IDX]), asset_folder);
+  std::vector<std::string> scenes;
 
-	unsigned int pow2_width = utils::nextPow2(width);
-	unsigned int pow2_height = utils::nextPow2(height);
+  if (cubemap.empty())
+    scenes = buildScenesList(4, toto, asset_folder, ASSET_FOLDER_IDX + 1);
+  else
+    scenes = buildScenesList(4, toto, asset_folder, CUBEMAP_IDX + 1);
 
-	glfwSetWindowUserPointer(window, &processor);
-	glfwSetFramebufferSizeCallback(window, glfw_window_size_callback);
-	glfwSetKeyCallback(window, glfw_key_callback);
-	glfwSetCursorPosCallback(window, glfw_mouse_callback);
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+  processor::GPUProcessor processor(scenes, cubemap, WINDOW_W, WINDOW_H);
+  processor.init(); // This will upload the data.
+  glfwSetWindowUserPointer(window, &processor);
 
-	try
-	{
-		if (!processor.init())
-		{
-			std::cerr << "artracer: obj parsing failed.\n";
-			std::cerr << "output: " << scene.error() << std::endl;
-			return 1;
-		}
-	}
-	catch (std::exception e)
-	{
-		std::cerr << "artracer: exception: " << std::endl;
-		std::cerr << e.what() << std::endl;
-		return 1;
-	}
+  const auto& interop = processor.getInterop();
+  double last_time = 0.0;
+  double curr_time = 0.0;
+  double delta = 0.0;
+  double elapsed = 0.0;
 
-	float last_time = 0.0f;
-	float curr_time = 0.0f;
-	float delta = 0.0f;
-	float elapsed = 0.0f;
+  while (!glfwWindowShouldClose(window))
+  {
+    curr_time = glfwGetTime();
+    delta = curr_time - last_time;
+    last_time = curr_time;
 
-	while (!glfwWindowShouldClose(window))
-	{
-		curr_time = (float)glfwGetTime();
-		delta = curr_time - last_time;
-		last_time = curr_time;
+    ////////////////////////////
+    ////      Update      //////
+    ////////////////////////////
 
-		if (elapsed >= 5.0)
-		{
-			std::cout << "artracer: FPS: " << std::fixed << std::setprecision(3) << (1.0 / delta) << std::endl;
-			elapsed = 0.0;
-		}
+    processor.update(delta);
+    // Binds data to GUI.
+    gui::GUIManager::inst()->begin();
+    gui::GUIManager::inst()->info(processor.getSceneId(), processor.getSceneItems());
+    gui::GUIManager::inst()->camera(processor.getCamera(), 0);
 
-		processor.run(delta);
+    if (g_mouse_trapped)
+      glfwSetCursorPos(window, (double)interop.half_width(), (double)interop.half_height());
+
+    elapsed += delta;
+
+    ////////////////////////////
+    ////      Rendering      ///
+    ////////////////////////////
+
+    processor.render();
+    gui::GUIManager::inst()->render();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
-
-		glfwSetCursorPos(window, width / 2, height / 2);
-		elapsed += delta;
 	}
 
 	//cudaDeviceSynchronize();
 	//scene.release();
 
+  gui::GUIManager::inst()->release();
+
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
-	cudaDeviceReset();
+  cudaDeviceReset();
 
 	exit(EXIT_SUCCESS);
 }

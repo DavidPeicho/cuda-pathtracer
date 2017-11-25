@@ -18,25 +18,19 @@ namespace scene
 
     public:
       void
-      upload(bool is_cpu);
+      upload(scene::Camera *camera);
 
       void
       release();
 
-      const inline struct SceneData *
-      getScenePointer()
+      const inline std::string&
+      getSceneName()
       {
-        return _scene_data;
+        return _filepath;
       }
 
-      struct Camera *
-      getCamPointer()
-      {
-        return _camera;
-      }
-
-      const inline struct SceneData *
-      getUploadedScenePointer()
+      const inline scene::SceneData *
+      getUploadedScenePointer() const
       {
         return _d_scene_data;
       }
@@ -55,13 +49,9 @@ namespace scene
 
     private:
       void
-      init(const char* filepath);
-
-      void
       upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
         const std::vector<tinyobj::material_t>& materials,
         const tinyobj::attrib_t attrib,
-        const std::string& cubemap_path,
         const std::string& base_folder);
 
       void
@@ -74,9 +64,10 @@ namespace scene
       bool _ready;
       std::string _load_error;
 
-      struct Camera *_camera;
-      struct SceneData *_scene_data;
-      struct SceneData *_d_scene_data;
+      struct scene::Camera _init_camera;
+
+      scene::SceneData *_scene_data;
+      scene::SceneData *_d_scene_data;
   };
 
 } // namespace scene

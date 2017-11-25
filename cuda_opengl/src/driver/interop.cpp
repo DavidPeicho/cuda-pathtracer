@@ -6,7 +6,9 @@ namespace driver
 {
   Interop::Interop(unsigned int w, unsigned int h)
           : _width(w)
+          , _half_width(w * 0.5)
           , _height(h)
+          , _half_height(h * 0.5)
           , _allocated(false)
           , _index(0)
   {
@@ -95,7 +97,9 @@ namespace driver
     cudaError_t cuda_err = cudaSuccess;
 
     _width = w;
+    _half_width = w * 0.5;
     _height = h;
+    _half_height = h * 0.5;
 
     for (int i = 0; i < 2; i++)
     {

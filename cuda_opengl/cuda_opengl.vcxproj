@@ -11,32 +11,44 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\stb_textedit.h" />
+    <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\stb_truetype.h" />
     <ClInclude Include="3rd_party\glad\glad.h" />
     <ClInclude Include="3rd_party\KHR\khrplatform.h" />
+    <ClInclude Include="src\gui\gui_manager.h" />
+    <ClInclude Include="src\gui\imconfig.h" />
+    <ClInclude Include="src\gui\imgui.h" />
+    <ClInclude Include="src\gui\imgui_impl_glfw_gl3.h" />
+    <ClInclude Include="src\gui\imgui_internal.h" />
+    <ClInclude Include="src\gui\stb_rect_pack.h" />
+    <ClInclude Include="src\gui\stb_textedit.h" />
+    <ClInclude Include="src\gui\stb_truetype.h" />
     <ClInclude Include="src\shaders\brdf.cuh" />
     <ClInclude Include="src\driver\cuda_helper.h" />
     <ClInclude Include="src\driver\gpu_info.h" />
     <ClInclude Include="src\driver\interop.h" />
-    <ClInclude Include="src\cpu_processor.h" />
     <ClInclude Include="src\gpu_processor.h" />
     <ClInclude Include="src\shaders\post_process.cuh" />
     <ClInclude Include="src\shaders\raytrace.h" />
-    <ClInclude Include="src\scene.h" />
-    <ClInclude Include="src\scene_data.h" />
+    <ClInclude Include="src\scene\scene.h" />
+    <ClInclude Include="src\scene\scene_data.h" />
     <ClInclude Include="src\material_loader.h" />
     <ClInclude Include="src\shaders\cutils_math.h" />
     <ClInclude Include="src\texture_utils.h" />
     <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\cpu_processor.cpp" />
     <ClCompile Include="src\glad.cpp" />
     <ClCompile Include="src\driver\gpu_info.cpp" />
     <ClCompile Include="src\driver\interop.cpp" />
     <ClCompile Include="src\gpu_processor.cpp" />
+    <ClCompile Include="src\gui\gui_manager.cpp" />
+    <ClCompile Include="src\gui\imgui.cpp" />
+    <ClCompile Include="src\gui\imgui_draw.cpp" />
+    <ClCompile Include="src\gui\imgui_impl_glfw_gl3.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\material_loader.cpp" />
-    <ClCompile Include="src\scene.cpp" />
+    <ClCompile Include="src\scene\scene.cpp" />
     <ClCompile Include="src\texture_utils.cpp" />
     <ClCompile Include="src\utils.cpp" />
   </ItemGroup>

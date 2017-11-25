@@ -4,21 +4,39 @@
 #include <unordered_map>
 #include <vector>
 
+#include "scene/scene_data.h"
 #include "shaders/cutils_math.h"
-
-#include "scene_data.h"
 
 namespace scene
 {
   class MaterialLoader
   {
     public:
-      MaterialLoader(const std::vector<tinyobj::material_t>& tiny_materials, const std::string mtl_folder);
-      ~MaterialLoader();
+      static inline MaterialLoader*
+      instance()
+      {
+        if (inst == nullptr)
+          inst = new MaterialLoader();
+
+        return inst;
+      }
 
     public:
+      MaterialLoader*
+      set(const std::vector<tinyobj::material_t> *tiny_materials,
+          const std::string mtl_folder);
+
       void
-      load(std::vector<Texture>&, std::vector<Material>&);
+      load(std::vector<Material>&);
+
+      void
+      release();
+
+      inline const std::vector<scene::Texture>&
+      getTextures() const
+      {
+        return _textures;
+      }
 
     private:
       int
@@ -35,14 +53,18 @@ namespace scene
       registerOrGet(std::string tex_rgb);
 
     private:
-      const std::string _mtl_folder;
+      static MaterialLoader *inst;
 
-      const std::vector<tinyobj::material_t>& _tiny_materials;
+    private:
+      const std::vector<tinyobj::material_t> *_tiny_materials;
+      std::string _mtl_folder;
+
+      unsigned int _id = 0;
 
       /// <summary>
       /// Contains loaded from disk texture. These textures are not ready yet
       /// to be sent to the GPU. We still have to pack them tight.
-      /// </summary>s
+      /// </summary>
       std::unordered_map<std::string, Texture> _loaded_tex;
 
       /// <summary>

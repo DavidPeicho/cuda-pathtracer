@@ -1,5 +1,3 @@
-#pragma once
-
 #include <algorithm>
 #include <cstring>
 
@@ -140,39 +138,26 @@ namespace scene
 
   }
 
-  static unsigned int ID = 0;
+  MaterialLoader *MaterialLoader::inst = nullptr;
 
-  MaterialLoader::MaterialLoader(const std::vector<tinyobj::material_t>& materials,
-    const std::string mtl_folder)
-    : _mtl_folder(mtl_folder)
-    , _tiny_materials(materials)
-  { }
-
-  MaterialLoader::~MaterialLoader()
+  MaterialLoader *
+  MaterialLoader::set(const std::vector<tinyobj::material_t> *tiny_materials,
+      const std::string mtl_folder)
   {
-    size_t s = _textures.size();
-    for (size_t i = 0; i < s; ++i) delete _textures[i].data;
+    _materials_gpu.clear();
+    _tiny_materials = tiny_materials;
+    _mtl_folder = mtl_folder;
 
-    // Some textures were directly added into the '_textures' vector.
-    // These textures were not packed so no intermediary allocation was made.
-    // We have to take this into account while freeing the memory.
-
-    for (auto& pair : _loaded_tex)
-    {
-      // Texture has been loaded but not used
-      // directly by itself, it should be freed.
-      if (!_packed_tex.count(pair.first)) delete pair.second.data;
-    }
+    return this;
   }
 
   void
-  MaterialLoader::load(std::vector<Texture> &out_tex,
-    std::vector<Material>& out_mat)
+  MaterialLoader::load(std::vector<Material>& out_mat)
   {
-    size_t nb_mat = _tiny_materials.size();
+    size_t nb_mat = _tiny_materials->size();
     for (size_t i = 0; i < nb_mat; ++i)
     {
-      const tinyobj::material_t &tiny_mat = _tiny_materials[i];
+      const tinyobj::material_t &tiny_mat = (*_tiny_materials)[i];
       Material mat;
 
       float3 default_diff_rgb = make_float3(
@@ -197,8 +182,26 @@ namespace scene
       _materials_gpu.push_back(mat);
     }
 
-    out_tex = _textures;
+    //out_tex = _textures;
     out_mat = _materials_gpu;
+  }
+
+  void
+  MaterialLoader::release()
+  {
+    size_t s = _textures.size();
+    for (size_t i = 0; i < s; ++i) delete[] _textures[i].data;
+
+    // Some textures were directly added into the '_textures' vector.
+    // These textures were not packed so no intermediary allocation was made.
+    // We have to take this into account while freeing the memory.
+
+    for (auto& pair : _loaded_tex)
+    {
+      // Texture has been loaded but not used
+      // directly by itself, it should be freed.
+      if (!_packed_tex.count(pair.first)) delete[] pair.second.data;
+    }
   }
 
   int
@@ -215,7 +218,7 @@ namespace scene
     if (tex_rgb.empty())
     {
       _textures.push_back(createUnitTex(default_rgb));
-      unsigned int curr_id = ID++;
+      unsigned int curr_id = _id++;
       return curr_id;
     }
     return registerOrGet(tex_rgb);
@@ -234,7 +237,7 @@ namespace scene
         make_float4(default_rgb.x, default_rgb.y, default_rgb.z, default_a)
       ));
 
-      unsigned int curr_id = ID++;
+      unsigned int curr_id = _id++;
       return curr_id;
     }
 
@@ -247,7 +250,7 @@ namespace scene
 
     if (tex_rgb.empty() && !tex_a.empty())
     {
-      unsigned curr_id = ID++;
+      unsigned curr_id = _id++;
       const Texture &tex = _loaded_tex[tex_a];
       if (tex.nb_chan == 1)
       {
@@ -269,7 +272,7 @@ namespace scene
 
     if (!tex_rgb.empty() && tex_a.empty())
     {
-      unsigned curr_id = ID++;
+      unsigned curr_id = _id++;
       const Texture &tex = _loaded_tex[tex_rgb];
       if (tex.nb_chan == 3)
       {
@@ -301,7 +304,7 @@ namespace scene
     // We send a packed texture according to which one is not loaded.
     if (rgb_tex.nb_chan != 3 || a_tex.nb_chan != 1)
     {
-      unsigned curr_id = ID++;
+      unsigned curr_id = _id++;
       // Both failed, we send a unit texture
       if (rgb_tex.nb_chan != 3 && a_tex.nb_chan != 1)
       {
@@ -374,7 +377,7 @@ namespace scene
 
     Texture packed = pack(rgb_tex, a_tex);
     _textures.push_back(packed);
-    _packed_tex[token] = ID++;
+    _packed_tex[token] = _id++;
 
     return _packed_tex[token];
   }
@@ -390,10 +393,10 @@ namespace scene
     if (tex.nb_chan == 0)
       return -1;
 
-    _packed_tex[tex_rgb] = ID;
+    _packed_tex[tex_rgb] = _id;
     _textures.push_back(tex);
 
-    unsigned int curr_id = ID++;
+    unsigned int curr_id = _id++;
     return curr_id;
   }
 }

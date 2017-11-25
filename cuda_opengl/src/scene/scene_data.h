@@ -12,6 +12,12 @@ namespace scene
     T *data;
   };
 
+  struct __align__(8) Cubemap
+  {
+    cudaArray *cubemap;
+    cudaChannelFormatDesc cubemap_desc;
+  };
+
   struct __align__(16) Texture
   {
     int w;
@@ -39,16 +45,19 @@ namespace scene
     struct Buffer<Mesh> meshes;
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
+  };
+
+  struct __align__(16) Scenes
+  {
+    struct SceneData **scenes;
     struct Buffer<struct Texture> textures;
-    cudaArray *cubemap;
-    cudaChannelFormatDesc cubemap_desc;
   };
 
   struct __align__(8) Material
   {
     int diffuse_spec_map;
     int normal_map;
-	float ior;
+	  float ior;
   };
 
   struct __align__(8) LightProp
@@ -59,13 +68,16 @@ namespace scene
     float radius;
   };
 
-  struct __align__(16) Camera
+  struct __align__(8) Camera
   {
     float3 position;
     float3 dir;
     float3 u;
     float3 v;
     float fov_x;
+    float speed;
+    float aperture;
+    float focus_dist;
   };
 
   struct __align__(16) Ray

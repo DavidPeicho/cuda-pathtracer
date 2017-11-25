@@ -30,7 +30,8 @@ exposure(float3 color)
   return curr * white_scale;
 }
 
-__device__ inline void camera_dof(scene::Ray& r, const scene::Camera& cam, curandState *rand_state)
+__device__ inline void
+camera_dof(scene::Ray& r, const scene::Camera& cam, curandState *rand_state)
 {
 	//Focus distance
 	float3 focal_point = 2.f * r.dir;

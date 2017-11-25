@@ -1,31 +1,38 @@
 #pragma once
 
 #include <cuda.h>
+#include <vector>
 
 #include "driver/interop.h"
 #include "driver/gpu_info.h"
 
+#include "scene/scene.h"
 #include "shaders/cutils_math.h"
 
-#include "scene.h"
+# define M_PI 3.14159265358979323846
 
 namespace processor
 {
   class GPUProcessor
   {
     public:
-      GPUProcessor(scene::Scene& scene, int w, int h);
-      ~GPUProcessor()
-      {
-        cudaFree(_d_temporal_framebuffer);
-      }
+      GPUProcessor(std::vector<std::string> scene_names,
+        std::string cubemap, int w, int h);
+
+      ~GPUProcessor();
 
     public:
-      bool
+      void
       init();
 
       void
-      run(float delta);
+      update(float delta);
+
+      void
+      render();
+
+      void
+      resize(unsigned int w, unsigned int h);
 
       void
       setKeyState(const unsigned int key, bool state);
@@ -33,8 +40,8 @@ namespace processor
       inline void
       setMousePos(const float x, const float y)
       {
-        float x_step = (x - _width * 0.5f);
-        float y_step = (y - _height * 0.5f);
+        double x_step = (x - _interop.half_width());
+        double y_step = (y - _interop.half_height());
 
         _angle.x -= x_step * 0.001f;
         _angle.y += y_step * 0.001f;
@@ -45,13 +52,14 @@ namespace processor
           cos(_angle.y) * cos(_angle.x)
         );
 
-        _scene.getCamPointer()->dir += offset;
-        _scene.getCamPointer()->dir = normalize(_scene.getCamPointer()->dir);
+        _camera.dir += offset;
+        _camera.dir = normalize(_camera.dir);
       }
 
       bool
       isKeyPressed(const unsigned int key);
 
+    public:
       inline void
       setMoved(bool moved)
       {
@@ -64,10 +72,42 @@ namespace processor
         return _interop;
       }
 
+      inline scene::Camera&
+      getCamera()
+      {
+        return _camera;
+      }
+
+      inline const std::vector<std::string>&
+      getSceneItems()
+      {
+        return _scene_names;
+      }
+
+      inline int&
+      getSceneId()
+      {
+        return _scene_id;
+      }
+
     private:
-      scene::Scene &_scene;
-      int _width;
-      int _height;
+      void
+      release();
+
+    private:
+      std::vector<std::string> _scene_names;
+      std::vector<scene::Scene> _raw_scenes;
+      std::string _cubemap_path;
+
+      scene::Camera _camera;
+      // These two attributes are used to render a cubemap.
+      scene::Cubemap _cubemap;
+
+      scene::Scenes _scenes;
+      scene::Scenes *_d_scenes;
+
+      int _scene_id;
+      int _prev_scene_id;
 
       driver::Interop _interop;
       driver::GPUInfo _gpu_info;
@@ -77,7 +117,7 @@ namespace processor
 
       bool _keys[65536];
       bool _moved;
-      float _cam_speed;
+      float _actual_speed;
 
       float2 _angle = make_float2(0.0f, M_PI);
   };
