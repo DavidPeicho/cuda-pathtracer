@@ -11,10 +11,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\imconfig.h" />
-    <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\imgui.h" />
-    <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\imgui_internal.h" />
-    <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\stb_rect_pack.h" />
     <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\stb_textedit.h" />
     <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\stb_truetype.h" />
     <ClInclude Include="3rd_party\glad\glad.h" />
@@ -42,8 +38,6 @@
     <ClInclude Include="src\utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\..\Downloads\imgui-1.52\imgui.cpp" />
-    <ClCompile Include="..\..\..\..\..\Downloads\imgui-1.52\imgui_draw.cpp" />
     <ClCompile Include="src\glad.cpp" />
     <ClCompile Include="src\driver\gpu_info.cpp" />
     <ClCompile Include="src\driver\interop.cpp" />

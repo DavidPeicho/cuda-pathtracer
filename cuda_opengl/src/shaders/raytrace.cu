@@ -412,7 +412,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  throughput *= __fdividef(1.0f, p);
 		  }
 	  }
-	  /*else
+	  else
 	  {
 		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
 		  acc += make_float3(val.x, val.y, val.z) * throughput;
@@ -422,7 +422,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  return acc;
 
 		  throughput *= __fdividef(1.0f, p);
-	  }*/
+	  }
   }
 
   return acc;
@@ -509,8 +509,8 @@ inline unsigned int WangHash(unsigned int a)
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
-  const scene::SceneData *const gpu_scene, const scene::Camera * const cam,
+raytrace(cudaArray_const_t array, const scene::SceneData *const gpu_scene,
+  const scene::Cubemap& cubemap, const scene::Camera * const cam,
 	const unsigned int width, const unsigned int height, cudaStream_t stream,
 	float3 *temporal_framebuffer, bool moved)
 {
@@ -523,11 +523,11 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
 
 	cudaBindSurfaceToArray(surf, array);
 
-  /*cubemap_ref.addressMode[0] = cudaAddressModeWrap;
+  cubemap_ref.addressMode[0] = cudaAddressModeWrap;
   cubemap_ref.addressMode[1] = cudaAddressModeWrap;
   cubemap_ref.filterMode = cudaFilterModeLinear;
   cubemap_ref.normalized = true;
-  cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);*/
+  cudaBindTextureToArray(cubemap_ref, cubemap.cubemap, cubemap.cubemap_desc);
 
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32

@@ -23,10 +23,10 @@ namespace scene
       void
       release();
 
-      const inline struct SceneData *
-      getScenePointer()
+      const inline std::string&
+      getSceneName()
       {
-        return _scene_data;
+        return _filepath;
       }
 
       const inline struct SceneData *
@@ -52,7 +52,6 @@ namespace scene
       upload_gpu(const std::vector<tinyobj::shape_t> &shapes,
         const std::vector<tinyobj::material_t>& materials,
         const tinyobj::attrib_t attrib,
-        const std::string& cubemap_path,
         const std::string& base_folder);
 
       void

@@ -12,6 +12,12 @@ namespace scene
     T *data;
   };
 
+  struct __align__(8) Cubemap
+  {
+    cudaArray *cubemap;
+    cudaChannelFormatDesc cubemap_desc;
+  };
+
   struct __align__(16) Texture
   {
     int w;
@@ -40,8 +46,6 @@ namespace scene
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
     struct Buffer<struct Texture> textures;
-    cudaArray *cubemap;
-    cudaChannelFormatDesc cubemap_desc;
   };
 
   struct __align__(8) Material

@@ -6,9 +6,8 @@
 #include "driver/interop.h"
 #include "driver/gpu_info.h"
 
-#include "shaders/cutils_math.h"
-
 #include "scene/scene.h"
+#include "shaders/cutils_math.h"
 
 # define M_PI 3.14159265358979323846
 
@@ -17,7 +16,9 @@ namespace processor
   class GPUProcessor
   {
     public:
-      GPUProcessor(std::vector<std::string> scene_names, int w, int h);
+      GPUProcessor(std::vector<std::string> scene_names,
+        std::string cubemap, int w, int h);
+
       ~GPUProcessor()
       {
         cudaFree(_d_temporal_framebuffer);
@@ -95,10 +96,15 @@ namespace processor
     private:
       std::vector<std::string> _scene_names;
       std::vector<scene::Scene> _scenes;
+      std::string _cubemap_path;
+
       int _scene_id;
       int _prev_scene_id;
 
       scene::Camera _camera;
+
+      // These two attributes are used to render a cubemap.
+      scene::Cubemap _cubemap;
 
       driver::Interop _interop;
       driver::GPUInfo _gpu_info;

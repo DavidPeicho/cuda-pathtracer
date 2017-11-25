@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+
 #include <string>
 #include <sstream>
 
@@ -39,6 +42,16 @@ namespace driver
       getCUDAGPU()
       {
         return *_gpus[1];
+      }
+
+      inline size_t
+      getFreeMo()
+      {
+        size_t free_byte = 0;
+        size_t total_byte = 0;
+
+        cudaMemGetInfo(&free_byte, &total_byte);
+        return free_byte / (1024 * 1024);
       }
 
     private:

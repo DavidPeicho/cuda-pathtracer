@@ -2,9 +2,7 @@
 # include <windows.h>
 #endif
 
-#include <cuda.h>
 #include <cuda_gl_interop.h>
-#include <cuda_runtime.h>
 #include <stdexcept>
 #include <cstring>
 
