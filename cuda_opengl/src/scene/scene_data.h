@@ -45,6 +45,11 @@ namespace scene
     struct Buffer<Mesh> meshes;
     struct Buffer<struct Material> materials;
     struct Buffer<struct LightProp> lights;
+  };
+
+  struct __align__(16) Scenes
+  {
+    struct SceneData **scenes;
     struct Buffer<struct Texture> textures;
   };
 

@@ -27,8 +27,11 @@ static bool g_mouse_trapped = true;
 static void
 glfw_init(GLFWwindow** window, const int width, const int height)
 {
-  if (!glfwInit())
+	if (!glfwInit())
+  {
+    std::cerr << "artracer: failed to initialize GLFW" << std::endl;
     exit(EXIT_FAILURE);
+  }
 
   glfwWindowHint(GLFW_DEPTH_BITS, 0);
   glfwWindowHint(GLFW_STENCIL_BITS, 0);
@@ -42,18 +45,16 @@ glfw_init(GLFWwindow** window, const int width, const int height)
 
   *window = glfwCreateWindow(width, height, "GLFW / CUDA Interop", NULL, NULL);
 
-  if (*window == NULL)
-  {
-    glfwTerminate();
-    exit(EXIT_FAILURE);
-  }
+	if (*window == NULL)
+	{
+    std::cerr << "artracer: failed to open GLFW window" << std::endl;
+		glfwTerminate();
+		exit(EXIT_FAILURE);
+	}
 
   glfwMakeContextCurrent(*window);
-
   gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-
   glfwSwapInterval(0);
-
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 }
 
@@ -165,7 +166,7 @@ main(int argc, char* argv[])
   // Creates the processor in charge of loading the assets, by creating
   // the scenes from the command line, and running the kernel each loop.
   // DEBUG
-  const char* toto[] = { "toto", "cuda_opengl/assets", "cubemap/night.jpg", "crate_land.scene", "crate_land.scene" };
+  const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
   auto cubemap = buildCubemapPath(std::string(toto[CUBEMAP_IDX]), asset_folder);

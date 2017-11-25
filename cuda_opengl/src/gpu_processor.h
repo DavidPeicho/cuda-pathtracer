@@ -19,10 +19,7 @@ namespace processor
       GPUProcessor(std::vector<std::string> scene_names,
         std::string cubemap, int w, int h);
 
-      ~GPUProcessor()
-      {
-        cudaFree(_d_temporal_framebuffer);
-      }
+      ~GPUProcessor();
 
     public:
       void
@@ -94,17 +91,23 @@ namespace processor
       }
 
     private:
+      void
+      release();
+
+    private:
       std::vector<std::string> _scene_names;
-      std::vector<scene::Scene> _scenes;
+      std::vector<scene::Scene> _raw_scenes;
       std::string _cubemap_path;
+
+      scene::Camera _camera;
+      // These two attributes are used to render a cubemap.
+      scene::Cubemap _cubemap;
+
+      scene::Scenes _scenes;
+      scene::Scenes *_d_scenes;
 
       int _scene_id;
       int _prev_scene_id;
-
-      scene::Camera _camera;
-
-      // These two attributes are used to render a cubemap.
-      scene::Cubemap _cubemap;
 
       driver::Interop _interop;
       driver::GPUInfo _gpu_info;

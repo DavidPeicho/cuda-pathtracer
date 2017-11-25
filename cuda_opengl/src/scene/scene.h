@@ -29,8 +29,8 @@ namespace scene
         return _filepath;
       }
 
-      const inline struct SceneData *
-      getUploadedScenePointer()
+      const inline scene::SceneData *
+      getUploadedScenePointer() const
       {
         return _d_scene_data;
       }
@@ -66,8 +66,8 @@ namespace scene
 
       struct scene::Camera _init_camera;
 
-      struct SceneData *_scene_data;
-      struct SceneData *_d_scene_data;
+      scene::SceneData *_scene_data;
+      scene::SceneData *_d_scene_data;
   };
 
 } // namespace scene

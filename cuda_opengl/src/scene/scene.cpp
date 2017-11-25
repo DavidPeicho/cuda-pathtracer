@@ -171,17 +171,17 @@ namespace scene
     /// <param name="materials">Materials obtained from TinyObjLoader.</param>
     /// <param name="d_materials">Materials storage for the GPU.</param>
     void upload_materials(const MaterialVector &materials,
-                          scene::SceneData *scene,
-                          const std::string& base_folder)
+                          scene::SceneData *scene, const std::string& base_folder)
     {
-      MaterialLoader mat_loader(materials, base_folder);
+      auto *mat_loader = MaterialLoader::instance();
+      mat_loader->set(&materials, base_folder);
 
-      std::vector<scene::Texture> cpu_textures;
+      //std::vector<scene::Texture> cpu_textures;
       std::vector<scene::Material> cpu_mat;
 
-      mat_loader.load(cpu_textures, cpu_mat);
+      mat_loader->load(cpu_mat);
 
-      std::vector<scene::Texture> gpu_textures(cpu_textures.size());
+      /*std::vector<scene::Texture> gpu_textures(cpu_textures.size());
 
       // Uploads every textures to the GPU
       for (size_t i = 0; i < cpu_textures.size(); ++i)
@@ -204,19 +204,20 @@ namespace scene
         cudaThrowError();
         cudaMemcpy(scene->textures.data, &gpu_textures[0], cpu_textures.size() * sizeof(scene::Texture), cudaMemcpyHostToDevice);
         cudaThrowError();
-      }
+      }*/
 
       // Uploads every materials to the GPU
       if (cpu_mat.size())
       {
         cudaMalloc(&scene->materials.data, cpu_mat.size() * sizeof(scene::Material));
         cudaThrowError();
-        cudaMemcpy(scene->materials.data, &cpu_mat[0], cpu_mat.size() * sizeof(scene::Material), cudaMemcpyHostToDevice);
+        cudaMemcpy(scene->materials.data, &cpu_mat[0],
+          cpu_mat.size() * sizeof(scene::Material), cudaMemcpyHostToDevice);
         cudaThrowError();
       }
 
       scene->materials.size = cpu_mat.size();
-      scene->textures.size = cpu_mat.size();
+      //scene->textures.size = cpu_mat.size();
     }
 
     void upload_meshes(const ShapeVector &shapes,
@@ -326,8 +327,7 @@ namespace scene
   void
   Scene::upload(scene::Camera *camera)
   {
-    if (_uploaded)
-      return;
+    if (_uploaded) return;
 
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -335,7 +335,7 @@ namespace scene
 
     // _sceneData is allocated on the heap,
     // and allows to handle cudaMalloc & cudaFree
-    _scene_data = new SceneData;
+    _scene_data = new scene::SceneData;
 
     std::string objfilepath;
     std::string base_dir = "";
@@ -418,14 +418,14 @@ namespace scene
     // FIRST: Frees texture by first retrieving pointer from the GPU,
     // and then calling cudaFree to free GPU pointed adress.
 
-    size_t nb_tex = _scene_data->textures.size;
+    /*size_t nb_tex = _scene_data->textures.size;
     scene::Texture *textures = new scene::Texture[nb_tex];
     cudaMemcpy(textures, _scene_data->textures.data,
       nb_tex * sizeof(scene::Texture), cudaMemcpyDeviceToHost);
     cudaError_t e = cudaGetLastError();
 
     for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
-    delete[] textures;
+    delete[] textures;*/
 
     // SECOND: Frees meshes by first retrieving pointer from the GPU,
     // and then calling cudaFree to free GPU pointed adress.

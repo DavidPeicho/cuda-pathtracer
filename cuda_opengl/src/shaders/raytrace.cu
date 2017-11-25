@@ -149,10 +149,14 @@ intersectSphere(const scene::Ray &r, const scene::LightProp & light, float& t)
 }
 
 __device__ inline bool
-intersect(const scene::Ray& r,
-  const struct scene::SceneData *const scene, IntersectionData &intersection)
+intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_id,
+  IntersectionData &intersection)
 {
   static const float MAX_DIST = 100000.0;
+
+  const scene::SceneData *scene = scenes->scenes[scene_id];
+  const scene::Buffer<scene::Texture>& textures = scenes->textures;
+
   float inter_dist = MAX_DIST;
   intersection.dist = MAX_DIST;
 
@@ -207,17 +211,18 @@ intersect(const scene::Ray& r,
   {
     // Fetches diffuse color from texture
     float4 fetch;
-    sampleTexture(scene->textures, inter_mat->diffuse_spec_map, intersection.uv, fetch);
+    sampleTexture(textures, inter_mat->diffuse_spec_map, intersection.uv, fetch);
     intersection.diffuse_col.x = fetch.x;
     intersection.diffuse_col.y = fetch.y;
     intersection.diffuse_col.z = fetch.z;
+
     intersection.specular_col = fetch.w;
 
     // Computes normal perturbated by normal map
     if (inter_mat->normal_map >= 0)
     {
       float3 normal;
-      sampleTexture(scene->textures, inter_mat->normal_map, intersection.uv, normal);
+      sampleTexture(textures, inter_mat->normal_map, intersection.uv, normal);
       intersection.normal = normalize((normal * 2.0f) - 1.0f);
 
       float3 binormal = normalize(cross(intersection.tangent, intersection.surface_normal));
@@ -273,8 +278,9 @@ sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
 }*/
 
 __device__ inline float3 radiance(scene::Ray& r,
-  const struct scene::SceneData *const scene, const scene::Camera * const cam,
-  curandState* rand_state, int is_static, int static_samples)
+  const struct scene::Scenes *scenes, unsigned int scene_id,
+  const scene::Camera * const cam, curandState* rand_state,
+  int is_static, int static_samples)
 {
   float3 acc = make_float3(0.0f);
   // For energy compensation on Russian roulette
@@ -291,9 +297,8 @@ __device__ inline float3 radiance(scene::Ray& r,
 	  float3 oriented_normal;
 
 	  float r1 = curand_uniform(rand_state);// *inter.specular_col;
-	  if (intersect(r, scene, inter))
+	  if (intersect(r, scenes, scene_id, inter))
 	  {
-      return inter.diffuse_col;
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
       //oriented_normal = inter.normal;
@@ -431,8 +436,9 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
-	const scene::SceneData *const scene, scene::Camera cam, unsigned int hash_seed,
-  int frame_nb, float3 *temporal_framebuffer, bool moved)
+	const scene::Scenes *scenes, unsigned int scene_id,
+  scene::Camera cam, unsigned int hash_seed, int frame_nb,
+  float3 *temporal_framebuffer, bool moved)
 {
   const unsigned int half_w = width / 2;
   const unsigned int half_h = height / 2;
@@ -442,7 +448,8 @@ kernel(const unsigned int width, const unsigned int height,
 
   if (x >= width || y >= height) return;
 
-	const unsigned int tid = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
+	const unsigned int tid = (blockIdx.x + blockIdx.y * gridDim.x)
+    * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
 	union rgba_24 rgbx;
 	rgbx.a = 0.0;
@@ -465,13 +472,13 @@ kernel(const unsigned int width, const unsigned int height,
 
 	int is_static = !moved;
 	int static_samples = 1;
-	/*int samples = 2 + is_static * static_samples;*/
+	int samples = 2 + is_static * static_samples;
 
-    float3 rad = make_float3(0.0f);
-	//for (int i = 0; i < samples; i++)
-	rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-    //rad /= samples;
+  float3 rad = make_float3(0.0f);
+	for (int i = 0; i < samples; i++)
+	  rad = radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
 
+  rad /= samples;
 	rad = clamp(rad, 0.0f, 1.0f);
 
 	int i = (height - y - 1) * width + x;
@@ -483,13 +490,9 @@ kernel(const unsigned int width, const unsigned int height,
 	rad = exposure(rad);
 	rad = pow(rad, 1.0f / 2.2f);
 
-  // DEBUG
-  rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-  // END DEBUG
-
-    rgbx.r = rad.x * 255;
-    rgbx.g = rad.y * 255;
-    rgbx.b = rad.z * 255;
+  rgbx.r = rad.x * 255;
+  rgbx.g = rad.y * 255;
+  rgbx.b = rad.z * 255;
 
 	surf2Dwrite(rgbx.b32,
 		surf,
@@ -510,7 +513,7 @@ inline unsigned int WangHash(unsigned int a)
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::SceneData *const gpu_scene,
+raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scene_id,
   const scene::Cubemap& cubemap, const scene::Camera * const cam,
 	const unsigned int width, const unsigned int height, cudaStream_t stream,
 	float3 *temporal_framebuffer, bool moved)
@@ -539,8 +542,8 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const gpu_scene,
 	dim3 threads_per_block(16, 16);
 	dim3 nb_blocks(width / threads_per_block.x + 1, height / threads_per_block.y + 1);
 
-	if (nb_blocks.x > 0 && nb_blocks.y > 0)
-		kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, gpu_scene, *cam,
+  if (nb_blocks.x > 0 && nb_blocks.y > 0)
+    kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scenes, scene_id , *cam,
       WangHash(seed), seed, temporal_framebuffer, moved);
 
 	return cudaSuccess;

@@ -10,8 +10,11 @@
 
 #include "gpu_processor.h"
 
+#include "material_loader.h"
+
 #include "texture_utils.h"
 #include "utils.h"
+
 #include "shaders/raytrace.h"
 
 namespace processor
@@ -154,12 +157,69 @@ namespace processor
       delete[] img;
       if (loaded) stbi_image_free(loaded);
     }
+
+    void
+    uploadScenes(const std::vector<scene::Scene>& raw_scenes, scene::Scenes& out)
+    {
+      if (raw_scenes.size() == 0) return;
+
+      std::vector<const scene::SceneData*> raw_scenes_ptr(raw_scenes.size());
+      for (unsigned int i = 0; i < raw_scenes.size(); ++i)
+      {
+        const scene::Scene &s = raw_scenes[i];
+        raw_scenes_ptr[i] = s.getUploadedScenePointer();
+      }
+
+      // Uploads scenes
+      size_t bytes_scenes = raw_scenes_ptr.size() * sizeof(scene::SceneData *);
+      cudaMalloc(&out.scenes, bytes_scenes);
+      cudaThrowError();
+      cudaMemcpy(out.scenes, &raw_scenes_ptr[0], bytes_scenes, cudaMemcpyHostToDevice);
+      cudaThrowError();
+
+    }
+
+    void
+    uploadTextures(scene::Scenes& out)
+    {
+      auto *mat_loader = scene::MaterialLoader::instance();
+      const auto& textures = mat_loader->getTextures();
+
+      if (textures.size() == 0) return;
+
+      std::vector<scene::Texture> gpu_textures(textures.size());
+
+      out.textures.size = textures.size();
+      for (size_t i = 0; i < out.textures.size; ++i)
+      {
+        const scene::Texture &cpu_tex = textures[i];
+        scene::Texture &gpu_tex = gpu_textures[i];
+
+        gpu_tex.w = cpu_tex.w;
+        gpu_tex.h = cpu_tex.h;
+        gpu_tex.nb_chan = cpu_tex.nb_chan;
+
+        size_t nb_bytes = cpu_tex.w * cpu_tex.h * cpu_tex.nb_chan * sizeof(float);
+        cudaMalloc(&gpu_tex.data, nb_bytes);
+        cudaThrowError();
+        cudaMemcpy(gpu_tex.data, cpu_tex.data, nb_bytes, cudaMemcpyHostToDevice);
+        cudaThrowError();
+      }
+
+      size_t nb_bytes = out.textures.size * sizeof(scene::Texture);
+      cudaMalloc(&out.textures.data, nb_bytes);
+      cudaThrowError();
+      cudaMemcpy(out.textures.data, &gpu_textures[0], nb_bytes, cudaMemcpyHostToDevice);
+      cudaThrowError();
+    }
+
   }
 
   GPUProcessor::GPUProcessor(std::vector<std::string> scene_names,
     std::string cubemap, int width, int height)
                : _scene_names(scene_names)
                , _cubemap_path(cubemap)
+               , _d_scenes(nullptr)
                , _scene_id(0)
                , _prev_scene_id(0)
                , _interop(width, height)
@@ -173,7 +233,12 @@ namespace processor
     for (size_t i = 0; i < 65536; ++i) _keys[i] = false;
 
     // Creates associated files scenes
-    for (const auto &file : scene_names) _scenes.emplace_back(file);
+    for (const auto &file : scene_names) _raw_scenes.emplace_back(file);
+  }
+
+  GPUProcessor::~GPUProcessor()
+  {
+    this->release();
   }
 
   void
@@ -190,7 +255,7 @@ namespace processor
     size_t total_consumed = 0;
 
     // Uploads scene for GPU usage
-    for (auto& scene : _scenes)
+    for (auto& scene : _raw_scenes)
     {
       std::cout << "Uploading scene `" << scene.getSceneName()
         << "'..." << std::endl;
@@ -204,6 +269,22 @@ namespace processor
       std::cout << consumed << " (MB) uploaded!\n" << std::endl;
     }
 
+    // Recaps the overall VRAM consummed. This gives a good idea
+    // how streaming is important, especially with textures!
+    /*std::cout << "Uploading completed!\n"
+      << "* " << _raw_scenes.size() << " scenes uploaded.\n"
+      << "* " << total_consumed << " (MB) VRAM consumed." << std::endl;*/
+
+    uploadScenes(_raw_scenes, _scenes);
+
+    uploadTextures(_scenes);
+
+    cudaMalloc(&_d_scenes, sizeof(scene::Scenes));
+    cudaThrowError();
+    cudaMemcpy(_d_scenes, &_scenes, sizeof(scene::Scenes), cudaMemcpyHostToDevice);
+    cudaThrowError();
+
+    // Cubemap upload.
     std::cout << "Uploading Cubemap `" << _cubemap_path << "'..." << std::endl;
 
     upload_cubemap(_cubemap_path, _cubemap);
@@ -211,12 +292,6 @@ namespace processor
     total_consumed += consumed;
 
     std::cout << free_space - _gpu_info.getFreeMo() << " (MB) uploaded!\n" << std::endl;
-
-    // Recaps the overall VRAM consummed. This gives a good idea
-    // how streaming is important, especially with textures!
-    std::cout << "Uploading completed!\n"
-      << "* " << _scenes.size() << " scenes uploaded.\n"
-      << "* " << total_consumed << " (MB) VRAM consumed." << std::endl;
   }
 
   void
@@ -245,21 +320,18 @@ namespace processor
   void
   GPUProcessor::render()
   {
-    if (_scenes.size() == 0) return;
+    _interop.clear();
+    if (_raw_scenes.size() == 0) return;
 
-    const auto *gpu_scene = _scenes[_scene_id].getUploadedScenePointer();
     if (_prev_scene_id != _scene_id)
     {
-      //cudaDeviceSynchronize();
       _prev_scene_id = _scene_id;
-      std::cout << gpu_scene << std::endl;
+      return;
     }
-
-    if (gpu_scene == nullptr) return;
 
     cudaError_t cuda_err = _interop.map(_stream);
     raytrace(
-      _interop.getArray(), gpu_scene, _cubemap, &_camera,
+      _interop.getArray(), _d_scenes, _scene_id, _cubemap, &_camera,
       _interop.width(), _interop.height(), _stream,
       _d_temporal_framebuffer, _moved
     );
@@ -294,6 +366,15 @@ namespace processor
     bool k = _keys[key];
     if (k) this->setMoved(true);
     return k;
+  }
+
+  void
+  GPUProcessor::release()
+  {
+    for (auto& scene : _raw_scenes) scene.release();
+
+    cudaFree(_d_scenes);
+    cudaFree(_d_temporal_framebuffer);
   }
 
 } // namespace processor
