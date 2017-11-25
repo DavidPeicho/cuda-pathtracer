@@ -83,17 +83,17 @@ namespace processor
     {
       std::cout << cam->dir.x << " | " << cam->dir.y << " | " << cam->dir.z << std::endl;
 
-      cam->dir.x = 0.0;
-      cam->dir.y = 0.0;
-      cam->dir.z = -1.0;
-      _angle.x = 0.0;
+      cam->dir.x = 0.0f;
+      cam->dir.y = 0.0f;
+      cam->dir.z = -1.0f;
+      _angle.x = 0.0f;
       _angle.y = M_PI;
     }
 
     if (this->isKeyPressed(GLFW_KEY_LEFT_SHIFT))
     {
       std::cout << cam->position.x << " | " << cam->position.y << " | " << cam->position.z << std::endl;
-      _cam_speed += 0.05;
+      _cam_speed += 0.05f;
     }
     else
       _cam_speed = 1.0;

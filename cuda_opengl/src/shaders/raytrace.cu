@@ -87,7 +87,7 @@ HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
             const int half_w, const int half_h, const scene::Camera &cam)
 {
-  float screen_dist = half_w / std::tan(cam.fov_x * 0.5);
+  float screen_dist = half_w / std::tanf(cam.fov_x * 0.5f);
 
   scene::Ray ray;
   ray.origin = cam.position;
@@ -133,7 +133,7 @@ intersectTriangle(const scene::Face &face, float3 &out_normal,
 }
 
 __device__ bool
-intersectSphere(const scene::Ray &r, const scene::LightProp & const light, float& t)
+intersectSphere(const scene::Ray &r, const scene::LightProp & light, float& t)
 {
     static const float epsilon = 0.01f;
 
@@ -188,7 +188,7 @@ intersect(const scene::Ray& r,
   for (unsigned l = 0; l < scene->lights.size; ++l)
   {
     // Checks lights intersection
-    const scene::LightProp &const light = scene->lights.data[l];
+    const scene::LightProp & light = scene->lights.data[l];
     if (intersectSphere(r, light, inter_dist)
         && inter_dist < intersection.dist && inter_dist >= 0.0)
     {
@@ -235,42 +235,6 @@ intersect(const scene::Ray& r,
 	return intersection.dist < MAX_DIST;
 }
 
-#define M_PI 3.14159265359f
-
-/*__device__ inline glm::vec3
-sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
-			  float PDF, const IntersectionData& inter)
-{
-	glm::vec3 L = glm::vec3(0.0f);
-	const scene::Buffer<scene::LightProp>& lights = scene->lights;
-	for (int i = 0; i < lights.size; i++)
-	{
-		const scene::LightProp& const l = lights.data[i];
-		scene::LightProp light;
-		glm::vec3 light_dir = l.vec - r.origin;
-
-		IntersectionData in;
-
-		scene::Ray r_l;
-		r_l.dir = light_dir;
-		r_l.origin = r.origin;
-		if (intersect(r_l, scene, in))
-		{
-			if (!inter.is_light)
-				continue;
-
-			if (l.vec == inter.light->vec)
-				continue;
-
-
-			float n_dot_l = glm::dot(in.normal, light_dir);
-			L += inter.diffuse_col * n_dot_l * l.emission / PDF;
-		}
-	}
-
-	return L;
-}*/
-
 __device__ inline float3 radiance(scene::Ray& r,
   const struct scene::SceneData *const scene, const scene::Camera * const cam,
   curandState* rand_state, int is_static, int static_samples)
@@ -283,20 +247,19 @@ __device__ inline float3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
+  // Max bounces
+  // Bounce more when the camera is not moving
   const int max_bounces = 1 + is_static * (static_samples + 1);
-  //const int max_bounces = 1;
   for (int b = 0; b < max_bounces; b++)
   {
 	  float3 oriented_normal;
 
-	  float r1 = curand_uniform(rand_state);// *inter.specular_col;
+	  float r1 = curand_uniform(rand_state);
 	  if (intersect(r, scene, inter))
 	  {
-		  //inter.normal = inter.surface_normal;
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 
-		  float3 BRDF;
 
 		  float3 up = make_float3(0.0, 1.0, 0.0);
 		  float3 right = cross(up, inter.normal);
@@ -305,29 +268,31 @@ __device__ inline float3 radiance(scene::Ray& r,
 		  // Oren-Nayar diffuse
 		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
 
-		  //Lambert BRDF/PDF
+		  // Specular ray
+		  // Computed everytime and then used to simulate roughness by concentrating rays towards it
 		  float3 spec = reflect(r.dir, inter.normal);
-			  float PDF = pdf_lambert(); // Divided by PI
-			  BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
-			  float3 direct_light = BRDF / PDF;
+		  float PDF = pdf_lambert(); // Divided by PI
+		  //Lambert BRDF/PDF
+		  float3 BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
+		  float3 direct_light = BRDF / PDF;
+		  // Default IOR (Index Of Refraction) is 1.0f
 		  if (inter.ior == 1.0f || inter.light != NULL)
 		  {
-
+			  // Accumulate light emission
 			  if (inter.light != NULL)
 			  {
 				  BRDF = make_float3(inter.light->color.x, inter.light->color.y, inter.light->color.z);
 
 				  acc += BRDF * inter.light->emission * throughput;
-
-				  //throughput *= BRDF / PDF;
 			  }
-			  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
 
-			  //r1 *= inter.specular_col;
+			  // Sample the hemisphere with a random ray
+			  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
 
 			  float sin_t = __fsqrt_rn(r1);
 			  float cos_t = __fsqrt_rn(1.f - r1);
 
+			  // u, v and oriented_normal form the base of the hemisphere
 			  float3 u = normalize(cross(fabs(oriented_normal.x) > .1 ? make_float3(0.0f, 1.0f, 0.0f) : make_float3(1.0f, 0.0f, 0.0f), oriented_normal));
 			  float3 v = cross(oriented_normal, u);
 
@@ -336,24 +301,29 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 			  r.origin += r.dir * inter.dist;
 
+			  // Mix the specular and random diffuse ray by the "specular_col" amount to approximate roughness
 			  r.dir = mix(d, spec, inter.specular_col);
 
+			  // Avoids self intersection
 			  r.origin += r.dir * 0.03f;
-
 
 			  throughput *= direct_light;
 		  }
 		  else
 		  {
 			  // Transmision
+			  // n1: IOR of exterior medium
 			  float n1 = 1.0f; // sin theta2
+			  // n1: IOR of entering medium
 			  float n2 = inter.ior; // sin theta1
 			  float c1 = dot(oriented_normal, r.dir);
 			  bool entering = dot(inter.normal, oriented_normal) > 0;
+			  // Snell's Law
 			  float eta = entering ? n1 / n2 : n2 / n1;
 			  float eta_2 = eta * eta;
 
 			  float c2_term = 1.0f - eta_2 * (1.0f - c1 * c1);
+			  // Total Internal Reflection
 			  if (c2_term < 0.0f)
 			  {
 				  r.origin += oriented_normal * inter.dist / 100.f;
@@ -363,6 +333,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  }
 			  else
 			  {
+				  // Schlick R0
 				  float R0 = (n2 - n1) / (n1 + n2);
 				  R0 *= R0;
 				  float c2 = __fsqrt_rn(c2_term);
@@ -370,27 +341,28 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 				  float f_cos_theta = 1.0f - (entering ? -c1 : dot(T, inter.normal));
 				  f_cos_theta = powf(cos_theta, 5.0f);
-				  // Fresnel Schlick
+				  // Fresnel-Schlick approximation for the reflection amount
 				  float f_r = R0 + (1.0f - R0) * f_cos_theta;
 
+				  // If reflection
+				  // Not exactly sure why "0.25f" works better than "f_r"...
 				  if (curand_uniform(rand_state) < 0.25f)
 				  {
 					  throughput *= f_r * direct_light;
-
-					  //return glm::vec3(1.0f, 0.0f, 0.0f);
 
 					  r.origin += oriented_normal * inter.dist / 100.f;
 
 					  r.dir = spec;// mix(d, spec, inter.specular_col);
 				  }
-				  else
+				  else // Transmission
 				  {
 					  // Energy conservation
 					  float f_t = 1.0f - f_r;
 
-					  //return glm::vec3(0.0f, 0.0f, 1.0f);
 					  throughput *= f_t * direct_light;
 
+					  // We're inside a mesh doing transmission, so we try to reduce the bias as much as possible
+					  // or the ray could get outside of the mesh which makes no sense
 					  r.origin += oriented_normal * inter.dist / 10000.f;
 
 					  r.dir = T;
@@ -400,11 +372,12 @@ __device__ inline float3 radiance(scene::Ray& r,
 	  }
 	  else
 	  {
+		  // Accumulate Environment map's contribution (approximated as many far away lights)
 		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
 		  acc += make_float3(val.x, val.y, val.z) * throughput;
 	  }
 
-	  // Russian roulette
+	  // Russian roulette for early path termination
 	  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
 	  if (r1 > p && b > 1)
 		  return acc;
@@ -420,13 +393,13 @@ kernel(const unsigned int width, const unsigned int height,
 	const scene::SceneData *const scene, scene::Camera cam, unsigned int hash_seed,
   int frame_nb, float3 *temporal_framebuffer, bool moved)
 {
-  const unsigned int half_w = width / 2;
-  const unsigned int half_h = height / 2;
+	const unsigned int half_w = width / 2;
+  	const unsigned int half_h = height / 2;
 
-	const int x = blockDim.x * blockIdx.x + threadIdx.x;
-	const int y = blockDim.y * blockIdx.y + threadIdx.y;
+  	const int x = blockDim.x * blockIdx.x + threadIdx.x;
+  	const int y = blockDim.y * blockIdx.y + threadIdx.y;
 
-  if (x >= width || y >= height) return;
+	if (x >= width || y >= height) return;
 
 	const unsigned int tid = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
@@ -438,35 +411,27 @@ kernel(const unsigned int width, const unsigned int height,
 
 	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
 
-	//Focus dist
-	//glm::vec3 focalPoint = 2.f * r.dir;
-	//float randomAngle = curand_uniform(&rand_state) * 2.0f * M_PI;
-	//float randomRadius = curand_uniform(&rand_state) * 0.125f;
-	//glm::vec3  randomAperturePos = ( cos(randomAngle) * cam.u + sin(randomAngle) * cam.v ) * randomRadius;
-	// Point on aperture to focal point
-	//glm::vec3 finalRayDir = normalize(focalPoint - randomAperturePos);
-
-	//r.origin += randomAperturePos;
-	//r.dir = finalRayDir;
+	// Depth-Of-Field
+	camera_dof(r, cam, &rand_state);
 
 	int is_static = !moved;
 	int static_samples = 1;
-	int samples = 2 + is_static * static_samples;
 
-    float3 rad = make_float3(0.0f);
-	//for (int i = 0; i < samples; i++)
-	rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
-    //rad /= samples;
-
+    float3 rad = radiance(r, scene, &cam, &rand_state, is_static, static_samples);
 	rad = clamp(rad, 0.0f, 1.0f);
 
+	// Accumulation buffer for when the camera is static
+	// This makes the image converge
 	int i = (height - y - 1) * width + x;
+	// Zero-out if the camera is moving to reset the buffer
 	temporal_framebuffer[i] *= is_static;
 	temporal_framebuffer[i] += rad;
 
 	rad = temporal_framebuffer[i] / (float)frame_nb;
 
+	// Tone Mapping + White Balance
 	rad = exposure(rad);
+	// Gamma Correction
 	rad = pow(rad, 1.0f / 2.2f);
 
     rgbx.r = rad.x * 255;
@@ -480,6 +445,8 @@ kernel(const unsigned int width, const unsigned int height,
 		cudaBoundaryModeZero);
 }
 
+// Very nice and fast PRNG
+// Credit: Thomas Wang
 inline unsigned int WangHash(unsigned int a)
 {
 	a = (a ^ 61) ^ (a >> 16);
@@ -497,6 +464,7 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
 	const unsigned int width, const unsigned int height, cudaStream_t stream,
 	float3 *temporal_framebuffer, bool moved)
 {
+	// Seed for the Wang Hash
 	static unsigned int seed = 0;
 
 	if (moved)
@@ -506,11 +474,11 @@ raytrace(cudaArray_const_t array, const scene::SceneData *const cpu_scene,
 
 	cudaBindSurfaceToArray(surf, array);
 
-  cubemap_ref.addressMode[0] = cudaAddressModeWrap;
-  cubemap_ref.addressMode[1] = cudaAddressModeWrap;
-  cubemap_ref.filterMode = cudaFilterModeLinear;
-  cubemap_ref.normalized = true;
-  cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);
+	cubemap_ref.addressMode[0] = cudaAddressModeWrap;
+	cubemap_ref.addressMode[1] = cudaAddressModeWrap;
+	cubemap_ref.filterMode = cudaFilterModeLinear;
+	cubemap_ref.normalized = true;
+	cudaBindTextureToArray(cubemap_ref, cpu_scene->cubemap, cpu_scene->cubemap_desc);
 
 	// Register occupancy : nb_threads = regs_per_block / 32
 	// Shared memory occupancy : nb_threads = shared_mem / 32

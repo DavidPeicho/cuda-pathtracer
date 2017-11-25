@@ -9,8 +9,6 @@
 
 #include "scene.h"
 
-# define M_PI 3.14159265358979323846
-
 namespace processor
 {
   class GPUProcessor
@@ -33,13 +31,13 @@ namespace processor
       setKeyState(const unsigned int key, bool state);
 
       inline void
-      setMousePos(const double x, const double y)
+      setMousePos(const float x, const float y)
       {
-        double x_step = (x - _width * 0.5);
-        double y_step = (y - _height * 0.5);
+        float x_step = (x - _width * 0.5f);
+        float y_step = (y - _height * 0.5f);
 
-        _angle.x -= x_step * 0.001;
-        _angle.y += y_step * 0.001;
+        _angle.x -= x_step * 0.001f;
+        _angle.y += y_step * 0.001f;
 
         float3 offset = make_float3(
           cos(_angle.y) * sin(_angle.x),

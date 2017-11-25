@@ -35,31 +35,33 @@ struct __align__(16) mat3
   float3 z;
 };
 
+#define M_PI 3.14159265359f
+
 ////////////////////////////////////////////////////////////////////////////////
 // host implementations of CUDA functions
 ////////////////////////////////////////////////////////////////////////////////
 
-inline float fminf_d(float a, float b)
+inline __host__ __device__ float fminf_d(float a, float b)
 {
   return a < b ? a : b;
 }
 
-inline float fmaxf_d(float a, float b)
+inline __host__ __device__ float fmaxf_d(float a, float b)
 {
   return a > b ? a : b;
 }
 
-inline int max_d(int a, int b)
+inline __host__ __device__ int max_d(int a, int b)
 {
   return a > b ? a : b;
 }
 
-inline int min_d(int a, int b)
+inline __host__ __device__ int min_d(int a, int b)
 {
   return a < b ? a : b;
 }
 
-inline float rsqrtf_d(float x)
+inline __host__ __device__ float rsqrtf_d(float x)
 {
     return 1.0f / sqrtf(x);
 }
@@ -1353,7 +1355,7 @@ inline __device__ __host__ float3 smoothstep(float3 a, float3 b, float3 x)
 inline __device__ __host__
 float3 mix(float3 x, float3 y, float a)
 {
-  return (x * (1.0 - a)) + y * a;
+  return (x * (1.0f - a)) + y * a;
 }
 
 inline __device__ __host__
