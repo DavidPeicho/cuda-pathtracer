@@ -49,8 +49,8 @@ namespace scene
 
   struct __align__(16) Scenes
   {
-    struct SceneData **scenes;
     struct Buffer<struct Texture> textures;
+    struct SceneData **scenes;
   };
 
   struct __align__(8) Material

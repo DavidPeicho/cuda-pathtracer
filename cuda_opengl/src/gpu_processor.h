@@ -16,8 +16,8 @@ namespace processor
   class GPUProcessor
   {
     public:
-      GPUProcessor(std::vector<std::string> scene_names,
-        std::string cubemap, int w, int h);
+      GPUProcessor(const std::string& folder,
+        std::vector<std::string> scene_names, int w, int h);
 
       ~GPUProcessor();
 
@@ -79,9 +79,15 @@ namespace processor
       }
 
       inline const std::vector<std::string>&
-      getSceneItems()
+      getSceneItems() const
       {
         return _scene_names;
+      }
+
+      inline const std::vector<std::string>&
+      getCubemapItems() const
+      {
+        return _cubemap_names;
       }
 
       inline int&
@@ -90,14 +96,24 @@ namespace processor
         return _scene_id;
       }
 
+      inline int&
+      getCubemapId()
+      {
+        return _cubemap_id;
+      }
+
     private:
       void
       release();
 
     private:
+      std::string _asset_folder;
+
       std::vector<std::string> _scene_names;
       std::vector<scene::Scene> _raw_scenes;
-      std::string _cubemap_path;
+
+      std::vector<std::string> _cubemap_names;
+      std::vector<scene::Cubemap> _cubemaps;
 
       scene::Camera _camera;
       // These two attributes are used to render a cubemap.
@@ -108,6 +124,7 @@ namespace processor
 
       int _scene_id;
       int _prev_scene_id;
+      int _cubemap_id;
 
       driver::Interop _interop;
       driver::GPUInfo _gpu_info;

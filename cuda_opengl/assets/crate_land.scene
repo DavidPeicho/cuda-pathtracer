@@ -1,3 +1,5 @@
+cubemap cubemap/field_with_house.jpg
+
 # camera x y z dir_x dir_y dir_z fov_x dof_focus dof_aperture
 camera -2.7 2.06 2.52 0.62 -0.348 -0.7 90.0 3.555 0.113
 

@@ -8,6 +8,6 @@
 
 cudaError_t
 raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scene_id,
-  const scene::Cubemap& cubemap, const scene::Camera * const cam,
-  const unsigned int width, const unsigned int height, cudaStream_t stream,
-  float3 *temporal_framebuffer, bool moved);
+  const std::vector<scene::Cubemap>& cubemaps, int cubemap_id,
+  const scene::Camera * const cam, const unsigned int width, const unsigned int height,
+  cudaStream_t stream, float3 *temporal_framebuffer, bool moved);

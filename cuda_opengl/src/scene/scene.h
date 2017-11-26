@@ -29,6 +29,12 @@ namespace scene
         return _filepath;
       }
 
+      const inline std::string&
+      getCubemapPath() const
+      {
+        return _cubemap_path;
+      }
+
       const inline scene::Camera&
       getInitCamera() const
       {
@@ -65,6 +71,7 @@ namespace scene
 
     private:
       std::string _filepath;
+      std::string _cubemap_path;
 
       bool _uploaded;
       bool _ready;

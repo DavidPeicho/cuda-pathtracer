@@ -519,20 +519,19 @@ inline unsigned int WangHash(unsigned int a)
 
 cudaError_t
 raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scene_id,
-  const scene::Cubemap& cubemap, const scene::Camera * const cam,
-	const unsigned int width, const unsigned int height, cudaStream_t stream,
-	float3 *temporal_framebuffer, bool moved)
+  const std::vector<scene::Cubemap>& cubemaps, int cubemap_id,
+  const scene::Camera * const cam, const unsigned int width, const unsigned int height,
+  cudaStream_t stream, float3 *temporal_framebuffer, bool moved)
 {
 	// Seed for the Wang Hash
 	static unsigned int seed = 0;
 
-	if (moved)
-		seed = 0;
-
+	if (moved) seed = 0;
 	seed++;
 
 	cudaBindSurfaceToArray(surf, array);
 
+  const scene::Cubemap& cubemap = cubemaps[cubemap_id];
   cubemap_ref.addressMode[0] = cudaAddressModeWrap;
   cubemap_ref.addressMode[1] = cudaAddressModeWrap;
   cubemap_ref.filterMode = cudaFilterModeLinear;

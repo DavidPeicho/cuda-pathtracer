@@ -82,7 +82,7 @@ namespace scene
     }
 
     void parse_scene(std::string filename, scene::SceneData &out_scene,
-      scene::Camera &cam, std::string& objfile)
+      scene::Camera &cam, std::string& objfile, std::string& cubemap)
     {
       std::ifstream file;
       file.open(filename);
@@ -157,6 +157,8 @@ namespace scene
             continue;
           }
         }
+        else if (token == "cubemap")
+          if (iss.peek() != std::char_traits<char>::eof()) iss >> cubemap;
       }
 
       out_scene.lights.size = 0;
@@ -323,7 +325,7 @@ namespace scene
     std::string mtl_dir = "";
     std::string full_obj_path = "";
 
-    parse_scene(_filepath, *_scene_data, _init_camera, objfilepath);
+    parse_scene(_filepath, *_scene_data, _init_camera, objfilepath, _cubemap_path);
 
     if (camera) *camera = _init_camera;
 

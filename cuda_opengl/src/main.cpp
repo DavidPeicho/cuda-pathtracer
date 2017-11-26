@@ -104,34 +104,18 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 }
 
 std::vector<std::string>
-buildScenesList(int argc, const char *argv[], const std::string& folder, unsigned int start)
+buildScenesList(int argc, const char *argv[], unsigned int start)
 {
   std::vector<std::string> scenes;
 
-  int nb_scenes = argc - start + 1;
+  int nb_scenes = argc - start;
   for (int i = 0; i < nb_scenes ; ++i)
   {
-    std::string file = folder + "/" + argv[i + start];
+    std::string file = argv[i + start];
     scenes.push_back(file);
   }
 
   return scenes;
-}
-
-std::string
-buildCubemapPath(const std::string& arg, const std::string& asset_folder)
-{
-  std::string cubemap;
-
-  auto idx = arg.find_last_of(".\\");
-  if (idx != std::string::npos)
-  {
-    auto ext = arg.substr(idx + 1);
-    if (!ext.empty() && (ext == "jpg" || ext == "tga" || ext == "png"))
-      return cubemap = asset_folder + "/" + arg;
-  }
-
-  return utils::isHexa(arg) ? arg : cubemap;
 }
 
 int
@@ -140,14 +124,14 @@ main(int argc, char* argv[])
   if (argc < 3)
   {
     std::cerr << "artracer: missing scene argument.\n";
-    std::cerr << "usage: artracer ASSET_FOLDER [CUBEMAP] [SCENE 1] [SCENE2] ..." << std::endl;
+    std::cerr << "usage: artracer ASSET_FOLDER [SCENE 1] [SCENE2] ..." << std::endl;
     //return 1;
   }
   (void) argv;
 
   constexpr int ASSET_FOLDER_IDX = 1;
-  constexpr int WINDOW_W = 960;
-  constexpr int WINDOW_H = 540;
+  constexpr int WINDOW_W = 1344;
+  constexpr int WINDOW_H = 756;
 
   GLFWwindow* window;
   glfw_init(&window, WINDOW_W, WINDOW_H);
@@ -166,18 +150,15 @@ main(int argc, char* argv[])
   // Creates the processor in charge of loading the assets, by creating
   // the scenes from the command line, and running the kernel each loop.
   // DEBUG
-  const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
+  //const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
+  const char* toto[] = { "toto", "assets", "crate_land.scene", "hut.scene" };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
-  auto cubemap = buildCubemapPath(std::string(toto[CUBEMAP_IDX]), asset_folder);
   std::vector<std::string> scenes;
 
-  if (cubemap.empty())
-    scenes = buildScenesList(4, toto, asset_folder, ASSET_FOLDER_IDX + 1);
-  else
-    scenes = buildScenesList(4, toto, asset_folder, CUBEMAP_IDX + 1);
+  scenes = buildScenesList(4, toto, ASSET_FOLDER_IDX + 1);
 
-  processor::GPUProcessor processor(scenes, cubemap, WINDOW_W, WINDOW_H);
+  processor::GPUProcessor processor(asset_folder, scenes, WINDOW_W, WINDOW_H);
   processor.init(); // This will upload the data.
   glfwSetWindowUserPointer(window, &processor);
 
@@ -200,7 +181,10 @@ main(int argc, char* argv[])
     processor.update(delta);
     // Binds data to GUI.
     gui::GUIManager::inst()->begin();
-    gui::GUIManager::inst()->info(processor.getSceneId(), processor.getSceneItems());
+    gui::GUIManager::inst()->info(
+      processor.getSceneId(), processor.getCubemapId(),
+      processor.getSceneItems(), processor.getCubemapItems()
+    );
     gui::GUIManager::inst()->camera(processor.getCamera(), 0);
 
     if (g_mouse_trapped)

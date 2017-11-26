@@ -36,12 +36,22 @@ namespace gui
   }
 
   float
-  GUIManager::info(int& scene_id, const std::vector<std::string>& items)
+  GUIManager::info(int& scene_id, int& cubemap_id,
+    const std::vector<std::string>& items, const std::vector<std::string>& cubemaps)
   {
+    constexpr unsigned int MAX_DISPLAY_ELT = 4;
+
     ImGui::Begin("Info", NULL, ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::Text("FPS: %.1f", 1000.0f / ImGui::GetIO().Framerate);
     float height = ImGui::GetWindowHeight();
-    ImGui::ListBox("Loaded scenes", &scene_id, vectorGetter, (void*)&items, (int)items.size(), -1);
+    ImGui::ListBox(
+      "Scenes", &scene_id, vectorGetter,
+      (void*)&items, (int)items.size(), MAX_DISPLAY_ELT
+    );
+    ImGui::ListBox(
+      "Cubemaps", &cubemap_id, vectorGetter,
+      (void*)&cubemaps, (int)cubemaps.size(), MAX_DISPLAY_ELT
+    );
     ImGui::End();
 
     return height;
@@ -57,7 +67,6 @@ namespace gui
     constexpr float MAX_POS = 1000.0f;
 
     (void) h_offset;
-    //ImGui::SetNextWindowPos(ImVec2(0, 100), ImGuiCond_Once);
     ImGui::Begin("Camera");
     ImGui::SliderFloat("Speed", &cam.speed, 1.0f, 10.0f);
     ImGui::SliderFloat("Fov X", &cam.fov_x, 1.2f, 2.0f);

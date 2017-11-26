@@ -3,6 +3,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <unordered_set>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
@@ -59,16 +61,21 @@ namespace processor
     }
 
     /// <summary>
-    /// Uploads a cubemap to the GPU. Only one cubemap can be used
-    ///
+    /// Creates a cubemap and allocates it on the GPU.
     /// </summary>
-    /// <param name="path">The path.</param>
-    /// <param name="out_scene">The out scene.</param>
-    void upload_cubemap(const std::string &path, scene::Cubemap& cubemap)
+    /// <param name="path">The path of the cubemap to load.</param>
+    /// <returns>
+    ///   Cubemap structure containing the cuda array as well as,
+    ///   the cubemap params.
+    /// </returns>
+    scene::Cubemap
+    uploadCubemap(const std::string &path)
     {
+      scene::Cubemap cubemap;
+
       static const unsigned int NB_COMP = 4;
       static const unsigned int NB_FACES = 6;
-      static const unsigned int DEFAULT_COLOR = 0x05070A;
+      static const unsigned int DEFAULT_COLOR = 0x131b23;
 
       // This pointer will contain the image data, either loaded
       // on the disk, or created by using a constant color.
@@ -134,6 +141,7 @@ namespace processor
         {
           std::cerr << "arttracer: cubemap loading fail: " << error << std::endl;
           img = createUnitTexture(NB_COMP, DEFAULT_COLOR, NB_FACES);
+          size = 1;
         }
       }
 
@@ -155,7 +163,33 @@ namespace processor
       cudaThrowError();
 
       delete[] img;
+
       if (loaded) stbi_image_free(loaded);
+
+      return cubemap;
+    }
+
+    void
+    uploadCubemaps(const std::string& folder,
+      const std::vector<scene::Scene>& raw_scenes,
+      std::vector<std::string>& out_names,
+      std::vector<scene::Cubemap>& out)
+    {
+      std::unordered_set<std::string> set;
+      for (const auto& s : raw_scenes)
+      {
+        const auto &path = s.getCubemapPath();
+        if (path.empty())
+          set.insert("empty");
+        else
+          set.insert(path);
+      }
+
+      for (const auto& map : set)
+      {
+        out_names.push_back(map);
+        out.push_back(uploadCubemap(folder + "/" + map));
+      }
     }
 
     void
@@ -176,7 +210,6 @@ namespace processor
       cudaThrowError();
       cudaMemcpy(out.scenes, &raw_scenes_ptr[0], bytes_scenes, cudaMemcpyHostToDevice);
       cudaThrowError();
-
     }
 
     void
@@ -215,13 +248,14 @@ namespace processor
 
   }
 
-  GPUProcessor::GPUProcessor(std::vector<std::string> scene_names,
-    std::string cubemap, int width, int height)
-               : _scene_names(scene_names)
-               , _cubemap_path(cubemap)
+  GPUProcessor::GPUProcessor(const std::string& asset,
+    std::vector<std::string> scene_names, int width, int height)
+               : _asset_folder(asset)
+               , _scene_names(scene_names)
                , _d_scenes(nullptr)
                , _scene_id(0)
                , _prev_scene_id(0)
+               , _cubemap_id(0)
                , _interop(width, height)
                , _d_temporal_framebuffer(nullptr)
                , _moved(false)
@@ -233,7 +267,8 @@ namespace processor
     for (size_t i = 0; i < 65536; ++i) _keys[i] = false;
 
     // Creates associated files scenes
-    for (const auto &file : scene_names) _raw_scenes.emplace_back(file);
+    for (const auto &file : scene_names)
+      _raw_scenes.emplace_back(asset + "/" + file);
   }
 
   GPUProcessor::~GPUProcessor()
@@ -282,11 +317,11 @@ namespace processor
 
     std::cout << consumed << " (MB) uploaded!\n" << std::endl;
 
-    // Cubemap upload.
-    std::cout << "Uploading Cubemap `" << _cubemap_path << "'..." << std::endl;
+    // Cubemaps upload.
+    std::cout << "Uploading Cubemaps ..." << std::endl;
     free_space = _gpu_info.getFreeMo();
 
-    upload_cubemap(_cubemap_path, _cubemap);
+    uploadCubemaps(_asset_folder, _raw_scenes, _cubemap_names, _cubemaps);
 
     consumed = free_space - _gpu_info.getFreeMo();
     total_consumed += consumed;
@@ -353,7 +388,8 @@ namespace processor
 
     cudaError_t cuda_err = _interop.map(_stream);
     raytrace(
-      _interop.getArray(), _d_scenes, _scene_id, _cubemap, &_camera,
+      _interop.getArray(), _d_scenes, _scene_id,
+      _cubemaps, _cubemap_id, &_camera,
       _interop.width(), _interop.height(), _stream,
       _d_temporal_framebuffer, _moved
     );
