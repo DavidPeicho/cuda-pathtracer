@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 
+#include <math.h>
 #include <math_functions.h>
 
 #include <curand.h>
@@ -87,7 +88,7 @@ HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
             const int half_w, const int half_h, scene::Camera &cam)
 {
-  float screen_dist = half_w / std::tanf(cam.fov_x * 0.5f);
+  float screen_dist = half_w / tanf(cam.fov_x * 0.5f);
 
   scene::Ray ray;
   ray.origin = cam.position;
