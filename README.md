@@ -9,6 +9,10 @@ Simple Pathtracer made for our CUDA course at EPITA, a French Computer Science s
 
 ## Features
 
+<p align="center">
+  <img width="500" src="https://user-images.githubusercontent.com/8783766/33244854-f8c8cafe-d2fe-11e7-982c-17393e29f634.gif">
+</p>
+
 ### Scenes
 
 In order to load a scene (or several at a time), you have to provide them on the command line.
