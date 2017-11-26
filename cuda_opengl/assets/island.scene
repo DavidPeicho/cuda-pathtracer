@@ -1,0 +1,6 @@
+cubemap cubemap/water.jpg
+
+# camera x y z dir_x dir_y dir_z fov_x dof_focus dof_aperture
+camera -0.41 5.81 -2.23 0.62 -0.348 -0.7 90.0 5.0 0.025
+
+scene obj/island.obj

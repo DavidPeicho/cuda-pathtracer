@@ -152,13 +152,16 @@ main(int argc, char* argv[])
   // Creates the processor in charge of loading the assets, by creating
   // the scenes from the command line, and running the kernel each loop.
   // DEBUG
-  //const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
-  const char* toto[] = { "toto", "assets", "color_sample.scene", "crate_land.scene", "hut.scene" };
+  const char* toto[] =
+  {
+    "toto", "assets", "island.scene", "color_sample.scene",
+    "cubemap/night.jpg", "crate_land.scene"
+  };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
   std::vector<std::string> scenes;
 
-  scenes = buildScenesList(5, toto, ASSET_FOLDER_IDX + 1);
+  scenes = buildScenesList(6, toto, ASSET_FOLDER_IDX + 1);
 
   processor::GPUProcessor processor(asset_folder, scenes, WINDOW_W, WINDOW_H);
   processor.init(); // This will upload the data.

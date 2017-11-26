@@ -1,0 +1,25 @@
+# Blender MTL File: 'untitled.blend'
+# Material Count: 2
+
+newmtl island
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.0000
+d 1.000000
+illum 2
+map_Kd textures\sand\albedo.jpg
+map_Bump textures\sand\normal.jpg
+
+newmtl water
+Ns 96.078431
+Ka 1.000000 1.000000 1.000000
+Kd 0.027176 0.208204 0.438543
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.3300000
+d 1.000000
+illum 2
+map_Bump textures\water\normal.jpg

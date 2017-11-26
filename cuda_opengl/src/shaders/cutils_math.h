@@ -1361,9 +1361,12 @@ float3 mix(float3 x, float3 y, float a)
 inline __device__ __host__
 float2 mod(float2 x, float a)
 {
-  float xx = x.x - a;
-  float yy = x.y - a;
-  return make_float2(xx - floorf(xx), yy - floorf(yy));
+  //float xx = x.x - a;
+  //float yy = x.y - a;
+  //return make_float2(xx - floorf(xx), yy - floorf(yy));
+  float xx = x.x - floorf(x.x / a);
+  float yy = x.y - floorf(x.y / a);
+  return make_float2(xx, yy);
 }
 
 inline __device__ __host__ float4 smoothstep(float4 a, float4 b, float4 x)

@@ -237,7 +237,6 @@ intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_i
       tbn.y = -binormal;
       tbn.z = intersection.surface_normal;
 
-      //intersection.normal = normalize((normal * 2.0f) - 1.0f);
       intersection.normal = tbn * intersection.normal;
     }
   }
