@@ -259,6 +259,7 @@ namespace processor
                , _interop(width, height)
                , _d_temporal_framebuffer(nullptr)
                , _moved(false)
+               , _post_id(0)
   {
     cudaStreamCreateWithFlags(&_stream, cudaStreamDefault);
     cudaMalloc(&_d_temporal_framebuffer, width * height * sizeof(float3));
@@ -391,7 +392,7 @@ namespace processor
       _interop.getArray(), _d_scenes, _scene_id,
       _cubemaps, _cubemap_id, &_camera,
       _interop.width(), _interop.height(), _stream,
-      _d_temporal_framebuffer, _moved
+      _d_temporal_framebuffer, _moved, _post_id
     );
     cuda_err = _interop.unmap(_stream);
 

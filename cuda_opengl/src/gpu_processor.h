@@ -92,6 +92,12 @@ namespace processor
         return _cubemap_names;
       }
 
+      inline const std::vector<std::string>&
+      getPostProcessItems()
+      {
+        return _post_names;
+      }
+
       inline int&
       getSceneId()
       {
@@ -102,6 +108,12 @@ namespace processor
       getCubemapId()
       {
         return _cubemap_id;
+      }
+
+      inline int&
+      getPostProcessId()
+      {
+        return _post_id;
       }
 
     private:
@@ -117,6 +129,12 @@ namespace processor
       std::vector<std::string> _cubemap_names;
       std::vector<scene::Cubemap> _cubemaps;
 
+      std::vector<std::string> _post_names =
+      {
+        "None",
+        "Grayscale"
+      };
+
       scene::Camera _camera;
       // These two attributes are used to render a cubemap.
       scene::Cubemap _cubemap;
@@ -127,6 +145,7 @@ namespace processor
       int _scene_id;
       int _prev_scene_id;
       int _cubemap_id;
+      int _post_id;
 
       driver::Interop _interop;
       driver::GPUInfo _gpu_info;

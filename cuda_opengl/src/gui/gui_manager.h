@@ -37,6 +37,9 @@ namespace gui
         const std::vector<std::string>& cubemaps);
 
       void
+      postProcess(int& post_id, const std::vector<std::string>& items);
+
+      void
       camera(scene::Camera& cam, float h_offset = 0.0f);
 
     private:

@@ -10,11 +10,16 @@
 
 #include "../utils.h"
 #include "../scene/scene_data.h"
+#include "../driver/cuda_helper.h"
 
 #include <iostream>
 
 #include "brdf.cuh"
 #include "post_process.cuh"
+
+using post_process_t = float3(*)(float3);
+
+post_process_t h_post_process_table[2];
 
 surface<void, cudaSurfaceType2D> surf;
 texture<float4, cudaTextureTypeCubemap> cubemap_ref;
@@ -439,7 +444,7 @@ __global__ void
 kernel(const unsigned int width, const unsigned int height,
 	const scene::Scenes *scenes, unsigned int scene_id,
   scene::Camera cam, unsigned int hash_seed, int frame_nb,
-  float3 *temporal_framebuffer, bool moved)
+  float3 *temporal_framebuffer, bool moved, post_process_t post)
 {
 	const unsigned int half_w = width / 2;
   	const unsigned int half_h = height / 2;
@@ -492,6 +497,7 @@ kernel(const unsigned int width, const unsigned int height,
 	rad = exposure(rad);
 	// Gamma Correction
 	rad = pow(rad, 1.0f / 2.2f);
+        rad = (*post)(rad);
 
     rgbx.r = rad.x * 255;
     rgbx.g = rad.y * 255;
@@ -521,7 +527,7 @@ cudaError_t
 raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scene_id,
   const std::vector<scene::Cubemap>& cubemaps, int cubemap_id,
   const scene::Camera * const cam, const unsigned int width, const unsigned int height,
-  cudaStream_t stream, float3 *temporal_framebuffer, bool moved)
+  cudaStream_t stream, float3 *temporal_framebuffer, bool moved, unsigned int post_id)
 {
 	// Seed for the Wang Hash
 	static unsigned int seed = 0;
@@ -549,7 +555,36 @@ raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scen
 
   if (nb_blocks.x > 0 && nb_blocks.y > 0)
     kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scenes, scene_id , *cam,
-      WangHash(seed), seed, temporal_framebuffer, moved);
+      WangHash(seed), seed, temporal_framebuffer, moved, h_post_process_table[post_id]);
 
 	return cudaSuccess;
+}
+
+__device__ float3
+no_post_process(float3 color)
+{
+  return color;
+}
+
+__device__ float3
+grayscale(float3 color)
+{
+  const float gray = color.x * 0.3 + color.y * 0.59 + color.z * 0.11;
+  return make_float3(gray, gray, gray);
+}
+
+__device__ post_process_t p_none = no_post_process;
+__device__ post_process_t p_gray = grayscale;
+
+// Copy the pointers from the function tables to the host side.
+void setupFunctionTables()
+{
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[0], p_none, sizeof(post_process_t)
+    );
+    cudaCheckError();
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[1], p_gray, sizeof(post_process_t)
+    );
+    cudaCheckError();
 }

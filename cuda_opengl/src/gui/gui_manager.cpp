@@ -58,6 +58,15 @@ namespace gui
   }
 
   void
+  GUIManager::postProcess(int& post_id, const std::vector<std::string>& items)
+  {
+    ImGui::Begin("Post Processing", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::ListBox("Effects", &post_id, vectorGetter, (void*)&items,
+                   (int)items.size(), -1);
+    ImGui::End();
+  }
+
+  void
   GUIManager::camera(scene::Camera& cam, float h_offset)
   {
     constexpr float MIN_APERTURE = 0.001f;
