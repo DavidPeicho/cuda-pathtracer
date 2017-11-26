@@ -112,7 +112,7 @@ buildScenesList(int argc, const char *argv[], unsigned int start)
   for (int i = 0; i < nb_scenes ; ++i)
   {
     std::string file = argv[i + start];
-    scenes.push_back(file);
+    if (!file.empty()) scenes.push_back(file);
   }
 
   return scenes;
@@ -130,8 +130,10 @@ main(int argc, char* argv[])
   (void) argv;
 
   constexpr int ASSET_FOLDER_IDX = 1;
-  constexpr int WINDOW_W = 1344;
-  constexpr int WINDOW_H = 756;
+  /*constexpr int WINDOW_W = 1344;
+  constexpr int WINDOW_H = 756;*/
+  constexpr int WINDOW_W = 960;
+  constexpr int WINDOW_H = 540;
 
   GLFWwindow* window;
   glfw_init(&window, WINDOW_W, WINDOW_H);
@@ -151,12 +153,12 @@ main(int argc, char* argv[])
   // the scenes from the command line, and running the kernel each loop.
   // DEBUG
   //const char* toto[] = { "toto", "assets", "cubemap/night.jpg", "crate_land.scene", "hut.scene" };
-  const char* toto[] = { "toto", "assets", "crate_land.scene", "hut.scene" };
+  const char* toto[] = { "toto", "assets", "color_sample.scene", "crate_land.scene", "hut.scene" };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
   std::vector<std::string> scenes;
 
-  scenes = buildScenesList(4, toto, ASSET_FOLDER_IDX + 1);
+  scenes = buildScenesList(5, toto, ASSET_FOLDER_IDX + 1);
 
   processor::GPUProcessor processor(asset_folder, scenes, WINDOW_W, WINDOW_H);
   processor.init(); // This will upload the data.
