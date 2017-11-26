@@ -1,6 +1,9 @@
 # Pathtracer in C++ with CUDA!
 
 Pathtracer using CUDA
+## Build
+
+``mkdir build && cd build && cmake .. && make``
 
 ## TODO
 
