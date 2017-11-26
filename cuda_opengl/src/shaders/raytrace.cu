@@ -85,12 +85,17 @@ sampleTexture(const scene::Buffer<scene::Texture>& textures,
 
 HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
-            const int half_w, const int half_h, const scene::Camera &cam)
+            const int half_w, const int half_h, scene::Camera &cam)
 {
   float screen_dist = half_w / std::tanf(cam.fov_x * 0.5f);
 
   scene::Ray ray;
   ray.origin = cam.position;
+
+  cam.u = normalize(cross(cam.dir, make_float3(0.0, -1.0, 0.0)));
+  cam.v = normalize(cross(cam.u, cam.dir));
+
+  cam.u *= -1.0;
 
   float3 screen_pos = cam.position + (cam.dir * screen_dist)
     + (cam.u * (float)(x - half_w)) + (cam.v * (float)(y - half_h));

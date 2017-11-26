@@ -50,7 +50,12 @@ namespace gui
   void
   GUIManager::camera(scene::Camera& cam, float h_offset)
   {
+    constexpr float MIN_APERTURE = 0.001f;
+    constexpr float MAX_APERTURE = 0.5f;
+    constexpr float MIN_FOCUS = 0.2f;
+    constexpr float MAX_FOCUS = 10.0f;
     constexpr float MAX_POS = 1000.0f;
+
     (void) h_offset;
     //ImGui::SetNextWindowPos(ImVec2(0, 100), ImGuiCond_Once);
     ImGui::Begin("Camera");
@@ -61,8 +66,12 @@ namespace gui
     ImGui::InputFloat("y", &cam.position.y, -MAX_POS, MAX_POS);
     ImGui::InputFloat("z", &cam.position.z, -MAX_POS, MAX_POS);
     ImGui::Separator();
-    ImGui::SliderFloat("Aperture size", &cam.aperture, 1.0f, 10.0f);
-    ImGui::SliderFloat("Focus distance", &cam.focus_dist, 0.001f, 1.0f);
+    ImGui::InputFloat("x", &cam.dir.x, -1.0, 1.0);
+    ImGui::InputFloat("y", &cam.dir.y, -1.0, 1.0);
+    ImGui::InputFloat("z", &cam.dir.z, -1.0, 1.0);
+    ImGui::Separator();
+    ImGui::SliderFloat("Aperture size", &cam.aperture, MIN_APERTURE, MAX_APERTURE);
+    ImGui::SliderFloat("Focus distance", &cam.focus_dist, MIN_FOCUS, MAX_FOCUS);
     ImGui::End();
   }
 

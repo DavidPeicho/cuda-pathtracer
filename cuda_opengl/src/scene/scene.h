@@ -29,6 +29,12 @@ namespace scene
         return _filepath;
       }
 
+      const inline scene::Camera&
+      getInitCamera() const
+      {
+        return _init_camera;
+      }
+
       const inline scene::SceneData *
       getUploadedScenePointer() const
       {
@@ -64,7 +70,7 @@ namespace scene
       bool _ready;
       std::string _load_error;
 
-      struct scene::Camera _init_camera;
+      scene::Camera _init_camera;
 
       scene::SceneData *_scene_data;
       scene::SceneData *_d_scene_data;

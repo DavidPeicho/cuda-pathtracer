@@ -258,45 +258,73 @@ namespace processor
     for (auto& scene : _raw_scenes)
     {
       std::cout << "Uploading scene `" << scene.getSceneName()
-        << "'..." << std::endl;
+        << "' primitives..." << std::endl;
 
       free_space = _gpu_info.getFreeMo();
-
-      scene.upload(&_camera);
+      scene.upload(nullptr);
       consumed = free_space - _gpu_info.getFreeMo();
       total_consumed += consumed;
 
       std::cout << consumed << " (MB) uploaded!\n" << std::endl;
     }
 
-    // Recaps the overall VRAM consummed. This gives a good idea
-    // how streaming is important, especially with textures!
-    /*std::cout << "Uploading completed!\n"
-      << "* " << _raw_scenes.size() << " scenes uploaded.\n"
-      << "* " << total_consumed << " (MB) VRAM consumed." << std::endl;*/
-
     uploadScenes(_raw_scenes, _scenes);
+
+    // Textures upload.
+    // This allows to avoid duplicating data.
+    std::cout << "Uploading Scenes textures..." << std::endl;
+    free_space = _gpu_info.getFreeMo();
 
     uploadTextures(_scenes);
 
+    consumed = free_space - _gpu_info.getFreeMo();
+    total_consumed += consumed;
+
+    std::cout << consumed << " (MB) uploaded!\n" << std::endl;
+
+    // Cubemap upload.
+    std::cout << "Uploading Cubemap `" << _cubemap_path << "'..." << std::endl;
+    free_space = _gpu_info.getFreeMo();
+
+    upload_cubemap(_cubemap_path, _cubemap);
+
+    consumed = free_space - _gpu_info.getFreeMo();
+    total_consumed += consumed;
+
+    std::cout << consumed << " (MB) uploaded!\n" << std::endl;
+
+    // Uploads the global scene. This is really fast,
+    // because we only upload a struct of pointers.
     cudaMalloc(&_d_scenes, sizeof(scene::Scenes));
     cudaThrowError();
     cudaMemcpy(_d_scenes, &_scenes, sizeof(scene::Scenes), cudaMemcpyHostToDevice);
     cudaThrowError();
 
-    // Cubemap upload.
-    std::cout << "Uploading Cubemap `" << _cubemap_path << "'..." << std::endl;
+    // Recaps the overall VRAM consummed. This gives a good idea
+    // how streaming is important, especially with textures!
+    std::cout << "Uploading completed!\n"
+      << "* " << _raw_scenes.size() << " scenes uploaded.\n"
+      << "* " << total_consumed << " (MB) VRAM consumed." << std::endl;
 
-    upload_cubemap(_cubemap_path, _cubemap);
-    consumed = free_space - _gpu_info.getFreeMo();
-    total_consumed += consumed;
-
-    std::cout << free_space - _gpu_info.getFreeMo() << " (MB) uploaded!\n" << std::endl;
+    // Sets the camera to the data
+    // extracted from the first scene.
+    if (this->_raw_scenes.size())
+      _camera = _raw_scenes[0].getInitCamera();
   }
 
   void
   GPUProcessor::update(float delta)
   {
+    // Changes the scene if an change happened in the UI.
+    if (_prev_scene_id != _scene_id)
+    {
+      _prev_scene_id = _scene_id;
+      // Resets the camera to the scene data
+      const auto &scene_cam = this->_raw_scenes[_scene_id].getInitCamera();
+      _camera = scene_cam;
+      return;
+    }
+
     // Updates cam rotation
     _camera.u = cross(WORLD_DOWN_VEC, _camera.dir);
     _camera.v = cross(_camera.dir, _camera.u);
@@ -322,12 +350,6 @@ namespace processor
   {
     _interop.clear();
     if (_raw_scenes.size() == 0) return;
-
-    if (_prev_scene_id != _scene_id)
-    {
-      _prev_scene_id = _scene_id;
-      return;
-    }
 
     cudaError_t cuda_err = _interop.map(_stream);
     raytrace(

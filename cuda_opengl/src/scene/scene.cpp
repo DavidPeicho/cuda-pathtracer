@@ -32,7 +32,19 @@ namespace scene
     using MaterialVector = std::vector<tinyobj::material_t>;
     using Real = tinyobj::real_t;
 
-    bool parse_double3(float3 &out, std::stringstream& iss)
+    float
+    parse_float(std::stringstream& iss, float default_val)
+    {
+      if (iss.peek() == std::char_traits<char>::eof()) return default_val;
+
+      float v = 0.0;
+      iss >> v;
+
+      return v;
+    }
+
+    bool
+    parse_double3(float3 &out, std::stringstream& iss)
     {
       if (iss.peek() == std::char_traits<char>::eof())
         return false;
@@ -50,25 +62,21 @@ namespace scene
 
     bool parse_camera(scene::Camera &cam, std::stringstream& iss)
     {
+      constexpr float DEFAULT_SPEED = 1.4f;
+
       if (!parse_double3(cam.position, iss)) return false;
-      if (!parse_double3(cam.u, iss)) return false;
-      if (!parse_double3(cam.v, iss)) return false;
+      if (!parse_double3(cam.dir, iss)) return false;
+
+      cam.dir = normalize(cam.dir);
 
       if (iss.peek() == std::char_traits<char>::eof()) return false;
-
-      cam.u = normalize(cam.u);
-      cam.v = normalize(cam.v);
-      cam.dir = cross(cam.u, cam.v);
-
       iss >> cam.fov_x;
       cam.fov_x = (cam.fov_x * M_PI) / 180.0;
 
-      // Parses the speed. If no speed is provided, we will use
-      // 1.0 by default.
-      if (iss.peek() == std::char_traits<char>::eof())
-        cam.speed = 1.0;
-      else
-        iss >> cam.speed;
+      cam.focus_dist = parse_float(iss, 2.0f);
+      cam.aperture = parse_float(iss, 0.125f);
+
+      cam.speed = DEFAULT_SPEED;
 
       return true;
     }
@@ -176,35 +184,9 @@ namespace scene
       auto *mat_loader = MaterialLoader::instance();
       mat_loader->set(&materials, base_folder);
 
-      //std::vector<scene::Texture> cpu_textures;
       std::vector<scene::Material> cpu_mat;
 
       mat_loader->load(cpu_mat);
-
-      /*std::vector<scene::Texture> gpu_textures(cpu_textures.size());
-
-      // Uploads every textures to the GPU
-      for (size_t i = 0; i < cpu_textures.size(); ++i)
-      {
-        const scene::Texture &cpu_tex = cpu_textures[i];
-        scene::Texture &gpu_tex = gpu_textures[i];
-        gpu_tex.w = cpu_tex.w;
-        gpu_tex.h = cpu_tex.h;
-        gpu_tex.nb_chan = cpu_tex.nb_chan;
-
-        size_t nb_bytes = cpu_tex.w * cpu_tex.h * cpu_tex.nb_chan * sizeof(float);
-        cudaMalloc(&gpu_tex.data, nb_bytes);
-        cudaThrowError();
-        cudaMemcpy(gpu_tex.data, cpu_tex.data, nb_bytes, cudaMemcpyHostToDevice);
-        cudaThrowError();
-      }
-      if (gpu_textures.size())
-      {
-        cudaMalloc(&scene->textures.data, cpu_textures.size() * sizeof(scene::Texture));
-        cudaThrowError();
-        cudaMemcpy(scene->textures.data, &gpu_textures[0], cpu_textures.size() * sizeof(scene::Texture), cudaMemcpyHostToDevice);
-        cudaThrowError();
-      }*/
 
       // Uploads every materials to the GPU
       if (cpu_mat.size())
@@ -217,7 +199,6 @@ namespace scene
       }
 
       scene->materials.size = cpu_mat.size();
-      //scene->textures.size = cpu_mat.size();
     }
 
     void upload_meshes(const ShapeVector &shapes,

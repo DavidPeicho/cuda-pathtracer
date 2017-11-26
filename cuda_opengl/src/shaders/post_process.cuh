@@ -34,10 +34,11 @@ __device__ inline void
 camera_dof(scene::Ray& r, const scene::Camera& cam, curandState *rand_state)
 {
 	//Focus distance
-	float3 focal_point = 2.f * r.dir;
+	//float3 focal_point = 2.f * r.dir;
+  float3 focal_point = cam.focus_dist * r.dir;
 	float random_angle = curand_uniform(rand_state) * 2.0f * M_PI;
 	// Aperture size
-	float random_radius = curand_uniform(rand_state) * 0.125f;
+	float random_radius = curand_uniform(rand_state) * cam.aperture;
 	float3  random_aperture_pos = (cos(random_angle) * cam.u + sin(random_angle) * cam.v) * random_radius;
 	// Point on aperture to focal point
 	float3 final_ray_dir = normalize(focal_point - random_aperture_pos);
