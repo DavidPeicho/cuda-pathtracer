@@ -306,7 +306,7 @@ __device__ inline float3 radiance(scene::Ray& r,
     if (intersect(r, scenes, scene_id, inter))
 	  {
 		  float cos_theta = dot(inter.normal, r.dir);
-		  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+		  oriented_normal = inter.normal;// cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 
 		  float3 up = make_float3(0.0, 1.0, 0.0);
 		  float3 right = cross(up, inter.normal);
