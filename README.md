@@ -55,7 +55,7 @@ Our algorithm works using few samples, by using temporal buffering.
 
 ### Dependencies
 
-You will need the following dependencies
+You will need the following dependencies (fetched if using our CMake):
 * [GLFW](http://www.glfw.org/)
 
 ### Windows
@@ -67,5 +67,5 @@ You will have to load the .sln, and go to the project properties window, in orde
 You can build the solution using:
 
 ```sh
-sh$ make
+sh$ mkdir build && cd build && cmake .. && make
 ```
