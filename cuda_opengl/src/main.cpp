@@ -155,7 +155,7 @@ main(int argc, char* argv[])
   const char* toto[] =
   {
     "toto", "assets", "island.scene", "color_sample.scene",
-    "cubemap/night.jpg", "crate_land.scene"
+    "indoor.scene", "crate_land.scene"
   };
   // END DEBUG
   auto asset_folder = toto[ASSET_FOLDER_IDX];
