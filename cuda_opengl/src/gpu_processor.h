@@ -132,7 +132,9 @@ namespace processor
       std::vector<std::string> _post_names =
       {
         "None",
-        "Grayscale"
+        "Grayscale",
+        "Sepia",
+        "Inversion"
       };
 
       scene::Camera _camera;

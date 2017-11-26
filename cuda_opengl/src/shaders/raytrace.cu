@@ -19,7 +19,7 @@
 
 using post_process_t = float3(*)(float3);
 
-post_process_t h_post_process_table[2];
+post_process_t h_post_process_table[4];
 
 surface<void, cudaSurfaceType2D> surf;
 texture<float4, cudaTextureTypeCubemap> cubemap_ref;
@@ -573,8 +573,26 @@ grayscale(float3 color)
   return make_float3(gray, gray, gray);
 }
 
+__device__ float3
+sepia(float3 color)
+{
+  return make_float3(
+      color.x * 0.393 + color.y * 0.769 + color.z * 0.189,
+      color.x * 0.349 + color.y * 0.686 + color.z * 0.168,
+      color.x * 0.272 + color.y * 0.534 + color.z * 0.131
+    );
+}
+
+__device__ float3
+invert(float3 color)
+{
+  return make_float3(1.0 - color.x, 1.0 - color.y, 1.0 - color.z);
+}
+
 __device__ post_process_t p_none = no_post_process;
 __device__ post_process_t p_gray = grayscale;
+__device__ post_process_t p_sepia = sepia;
+__device__ post_process_t p_invert = invert;
 
 // Copy the pointers from the function tables to the host side.
 void setupFunctionTables()
@@ -585,6 +603,14 @@ void setupFunctionTables()
     cudaCheckError();
     cudaMemcpyFromSymbol(
       &h_post_process_table[1], p_gray, sizeof(post_process_t)
+    );
+    cudaCheckError();
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[2], p_sepia, sizeof(post_process_t)
+    );
+    cudaCheckError();
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[3], p_invert, sizeof(post_process_t)
     );
     cudaCheckError();
 }
