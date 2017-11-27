@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 
+#include <math.h>
 #include <math_functions.h>
 
 #include <curand.h>
@@ -9,11 +10,16 @@
 
 #include "../utils.h"
 #include "../scene/scene_data.h"
+#include "../driver/cuda_helper.h"
 
 #include <iostream>
 
 #include "brdf.cuh"
 #include "post_process.cuh"
+
+using post_process_t = float3(*)(const float3&);
+
+post_process_t h_post_process_table[4];
 
 surface<void, cudaSurfaceType2D> surf;
 texture<float4, cudaTextureTypeCubemap> cubemap_ref;
@@ -87,7 +93,7 @@ HOST_DEVICE inline scene::Ray
 generateRay(const int x, const int y,
             const int half_w, const int half_h, scene::Camera &cam)
 {
-  float screen_dist = half_w / std::tanf(cam.fov_x * 0.5f);
+  float screen_dist = half_w / tanf(cam.fov_x * 0.5f);
 
   scene::Ray ray;
   ray.origin = cam.position;
@@ -438,7 +444,7 @@ __global__ void
 kernel(const unsigned int width, const unsigned int height,
 	const scene::Scenes *scenes, unsigned int scene_id,
   scene::Camera cam, unsigned int hash_seed, int frame_nb,
-  float3 *temporal_framebuffer, bool moved)
+  float3 *temporal_framebuffer, bool moved, post_process_t post)
 {
 	const unsigned int half_w = width / 2;
   	const unsigned int half_h = height / 2;
@@ -491,6 +497,7 @@ kernel(const unsigned int width, const unsigned int height,
 	rad = exposure(rad);
 	// Gamma Correction
 	rad = pow(rad, 1.0f / 2.2f);
+        rad = (*post)(rad);
 
     rgbx.r = rad.x * 255;
     rgbx.g = rad.y * 255;
@@ -520,7 +527,7 @@ cudaError_t
 raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scene_id,
   const std::vector<scene::Cubemap>& cubemaps, int cubemap_id,
   const scene::Camera * const cam, const unsigned int width, const unsigned int height,
-  cudaStream_t stream, float3 *temporal_framebuffer, bool moved)
+  cudaStream_t stream, float3 *temporal_framebuffer, bool moved, unsigned int post_id)
 {
 	// Seed for the Wang Hash
 	static unsigned int seed = 0;
@@ -548,7 +555,62 @@ raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scen
 
   if (nb_blocks.x > 0 && nb_blocks.y > 0)
     kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scenes, scene_id , *cam,
-      WangHash(seed), seed, temporal_framebuffer, moved);
+      WangHash(seed), seed, temporal_framebuffer, moved, h_post_process_table[post_id]);
 
 	return cudaSuccess;
+}
+
+__device__ float3
+no_post_process(const float3 &color)
+{
+  return color;
+}
+
+__device__ float3
+grayscale(const float3 &color)
+{
+  const float gray = color.x * 0.3 + color.y * 0.59 + color.z * 0.11;
+  return make_float3(gray, gray, gray);
+}
+
+__device__ float3
+sepia(const float3 &color)
+{
+  return make_float3(
+      color.x * 0.393 + color.y * 0.769 + color.z * 0.189,
+      color.x * 0.349 + color.y * 0.686 + color.z * 0.168,
+      color.x * 0.272 + color.y * 0.534 + color.z * 0.131
+    );
+}
+
+__device__ float3
+invert(const float3 &color)
+{
+  return make_float3(1.0 - color.x, 1.0 - color.y, 1.0 - color.z);
+}
+
+__device__ post_process_t p_none = no_post_process;
+__device__ post_process_t p_gray = grayscale;
+__device__ post_process_t p_sepia = sepia;
+__device__ post_process_t p_invert = invert;
+
+// Copy the pointers from the function tables to the host side.
+void setupFunctionTables()
+{
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[0], p_none, sizeof(post_process_t)
+    );
+    cudaCheckError();
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[1], p_gray, sizeof(post_process_t)
+    );
+    cudaCheckError();
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[2], p_sepia, sizeof(post_process_t)
+    );
+    cudaCheckError();
+    cudaMemcpyFromSymbol(
+      &h_post_process_table[3], p_invert, sizeof(post_process_t)
+    );
+    cudaCheckError();
 }

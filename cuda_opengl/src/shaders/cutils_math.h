@@ -35,7 +35,9 @@ struct __align__(16) mat3
   float3 z;
 };
 
+#ifndef M_PI
 #define M_PI 3.14159265359f
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // host implementations of CUDA functions

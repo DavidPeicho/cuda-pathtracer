@@ -42,7 +42,7 @@ namespace gui
     constexpr unsigned int MAX_DISPLAY_ELT = 4;
 
     ImGui::Begin("Info", NULL, ImGuiWindowFlags_AlwaysAutoResize);
-    ImGui::Text("FPS: %.1f", 1000.0f / ImGui::GetIO().Framerate);
+    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     float height = ImGui::GetWindowHeight();
     ImGui::ListBox(
       "Scenes", &scene_id, vectorGetter,
@@ -55,6 +55,15 @@ namespace gui
     ImGui::End();
 
     return height;
+  }
+
+  void
+  GUIManager::postProcess(int& post_id, const std::vector<std::string>& items)
+  {
+    ImGui::Begin("Post Processing", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::ListBox("Effects", &post_id, vectorGetter, (void*)&items,
+                   (int)items.size(), -1);
+    ImGui::End();
   }
 
   void

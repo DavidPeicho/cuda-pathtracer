@@ -9,7 +9,9 @@
 #include "scene/scene.h"
 #include "shaders/cutils_math.h"
 
+#ifndef M_PI
 # define M_PI 3.14159265358979323846
+#endif
 
 namespace processor
 {
@@ -90,6 +92,12 @@ namespace processor
         return _cubemap_names;
       }
 
+      inline const std::vector<std::string>&
+      getPostProcessItems()
+      {
+        return _post_names;
+      }
+
       inline int&
       getSceneId()
       {
@@ -100,6 +108,12 @@ namespace processor
       getCubemapId()
       {
         return _cubemap_id;
+      }
+
+      inline int&
+      getPostProcessId()
+      {
+        return _post_id;
       }
 
     private:
@@ -115,6 +129,14 @@ namespace processor
       std::vector<std::string> _cubemap_names;
       std::vector<scene::Cubemap> _cubemaps;
 
+      std::vector<std::string> _post_names =
+      {
+        "None",
+        "Grayscale",
+        "Sepia",
+        "Inversion"
+      };
+
       scene::Camera _camera;
       // These two attributes are used to render a cubemap.
       scene::Cubemap _cubemap;
@@ -125,6 +147,7 @@ namespace processor
       int _scene_id;
       int _prev_scene_id;
       int _cubemap_id;
+      int _post_id;
 
       driver::Interop _interop;
       driver::GPUInfo _gpu_info;
