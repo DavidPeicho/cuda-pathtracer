@@ -14,7 +14,7 @@
 __device__ inline float3
 brdf_lambert(float3 color)
 {
-	return color; // Divided by PI, but cancels out in the PDF
+  return color; // Divided by PI, but cancels out in the PDF
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -24,18 +24,18 @@ brdf_lambert(float3 color)
 /// <summary>
 /// Computes the PDF lambert. This is only a constant.
 /// </summary>
-__device__ inline
-float pdf_lambert()
+__device__ inline float
+pdf_lambert()
 {
-	return 0.5f;
+  return 0.5f;
 }
 
 /// <summary>
 /// Computes the Oren Nayar PDF. For now, it is not complete,
 /// but we decided not to use it.
 /// </summary>
-__device__ inline
-float pdf_oren_nayar()
+__device__ inline float
+pdf_oren_nayar()
 {
-	return 0.5f;
+  return 0.5f;
 }

@@ -1,8 +1,8 @@
 #pragma once
 
+#include <cuda_runtime.h>
 #include <curand.h>
 #include <curand_kernel.h>
-#include <cuda_runtime.h>
 
 struct __align__(8) IntersectionData
 {
@@ -11,15 +11,14 @@ struct __align__(8) IntersectionData
   float3 tangent;
   float3 diffuse_col;
   float2 uv;
-  const scene::LightProp *light;
+  const scene::LightProp* light;
   float dist;
   float specular_col;
   float ior;
 };
 
-
 __device__ inline int
-getTextureIdx(const scene::Texture &texture, const float2& uv)
+getTextureIdx(const scene::Texture& texture, const float2& uv)
 {
   int x = uv.x * (texture.w - 1);
   int y = uv.y * (texture.h - 1);
@@ -34,10 +33,10 @@ getTextureIdx(const scene::Texture &texture, const float2& uv)
 /// <param name="uv">Interpolated UVs used for the fetch.</param>
 /// <param name="out">Contains the texture fetch value, as a float3.</param>
 __device__ inline void
-sampleTexture(const scene::Buffer<scene::Texture>& textures,
-  int tex_id, const float2& uv, float3& out)
+sampleTexture(const scene::Buffer<scene::Texture>& textures, int tex_id,
+              const float2& uv, float3& out)
 {
-  const scene::Texture &tex = textures.data[tex_id];
+  const scene::Texture& tex = textures.data[tex_id];
   int idx = getTextureIdx(tex, uv);
 
   out.x = tex.data[idx];
@@ -53,10 +52,10 @@ sampleTexture(const scene::Buffer<scene::Texture>& textures,
 /// <param name="uv">Interpolated UVs used for the fetch.</param>
 /// <param name="out">Contains the texture fetch value, as a float4.</param>
 __device__ inline void
-sampleTexture(const scene::Buffer<scene::Texture>& textures,
-  int tex_id, const float2& uv, float4& out)
+sampleTexture(const scene::Buffer<scene::Texture>& textures, int tex_id,
+              const float2& uv, float4& out)
 {
-  const scene::Texture &tex = textures.data[tex_id];
+  const scene::Texture& tex = textures.data[tex_id];
   int idx = getTextureIdx(tex, uv);
 
   out.x = tex.data[idx];
@@ -74,8 +73,8 @@ sampleTexture(const scene::Buffer<scene::Texture>& textures,
 /// <param name="half_h">Half of the height of the virtual screen.</param>
 /// <param name="cam">Scene camera.</param>
 HOST_DEVICE inline scene::Ray
-generateRay(const int x, const int y,
-  const int half_w, const int half_h, scene::Camera &cam)
+generateRay(const int x, const int y, const int half_w, const int half_h,
+            scene::Camera& cam)
 {
   float screen_dist = half_w / tanf(cam.fov_x * 0.5f);
 
@@ -87,8 +86,9 @@ generateRay(const int x, const int y,
 
   cam.u *= -1.0;
 
-  float3 screen_pos = cam.position + (cam.dir * screen_dist)
-    + (cam.u * (float)(x - half_w)) + (cam.v * (float)(y - half_h));
+  float3 screen_pos = cam.position + (cam.dir * screen_dist) +
+                      (cam.u * (float)(x - half_w)) +
+                      (cam.v * (float)(y - half_h));
 
   ray.dir = screen_pos - cam.position;
   ray.dir = normalize(ray.dir);
@@ -100,8 +100,8 @@ generateRay(const int x, const int y,
 /// Checks a ray-triangle intersection.
 /// </summary>
 __device__ inline bool
-intersectTriangle(const scene::Face &face, float3 &out_normal,
-  float2 &out_uv, const scene::Ray &ray, float& t)
+intersectTriangle(const scene::Face& face, float3& out_normal, float2& out_uv,
+                  const scene::Ray& ray, float& t)
 {
   float3 v0v1 = face.vertices[1] - face.vertices[0];
   float3 v0v2 = face.vertices[2] - face.vertices[0];
@@ -113,17 +113,21 @@ intersectTriangle(const scene::Face &face, float3 &out_normal,
   float inv_det = __fdividef(1.f, det);
   float3 t_vec = ray.origin - face.vertices[0];
   float u = dot(t_vec, p_vec) * inv_det;
-  if (u < 0 || u > 1) return false;
+  if (u < 0 || u > 1)
+    return false;
 
   float3 qvec = cross(t_vec, v0v1);
   float v = dot(ray.dir, qvec) * inv_det;
-  if (v < 0 || u + v > 1) return false;
+  if (v < 0 || u + v > 1)
+    return false;
 
   // Interpolates normals
-  out_normal = (1.0f - u - v) * face.normals[0] + u * face.normals[1] + v * face.normals[2];
-  //out_normal = face.normals[0];
+  out_normal = (1.0f - u - v) * face.normals[0] + u * face.normals[1] +
+               v * face.normals[2];
+  // out_normal = face.normals[0];
   // Interpolates uvs
-  out_uv = (1.0f - u - v) * face.texcoords[0] + u * face.texcoords[1] + v * face.texcoords[2];
+  out_uv = (1.0f - u - v) * face.texcoords[0] + u * face.texcoords[1] +
+           v * face.texcoords[2];
   out_uv = mod(out_uv, 1.0);
 
   t = dot(v0v2, qvec) * inv_det;
@@ -134,14 +138,15 @@ intersectTriangle(const scene::Face &face, float3 &out_normal,
 /// Checks a ray-sphere intersection, using a parametric equation.
 /// </summary>
 __device__ bool
-intersectSphere(const scene::Ray &r, const scene::LightProp & light, float& t)
+intersectSphere(const scene::Ray& r, const scene::LightProp& light, float& t)
 {
   static const float epsilon = 0.01f;
 
   float3 op = light.vec - r.origin;
   float b = dot(op, r.dir);
-  float disc = b*b - dot(op, op) + light.radius * light.radius;
-  if (disc < 0.0) return 0;
+  float disc = b * b - dot(op, op) + light.radius * light.radius;
+  if (disc < 0.0)
+    return 0;
 
   disc = __fsqrt_rn(disc);
   (t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0);
@@ -154,12 +159,12 @@ intersectSphere(const scene::Ray &r, const scene::LightProp & light, float& t)
 /// scene pointed by `scene_id'.
 /// </summary>
 __device__ inline bool
-intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_id,
-  IntersectionData &intersection)
+intersect(const scene::Ray& r, const scene::Scenes* scenes,
+          unsigned int scene_id, IntersectionData& intersection)
 {
   static const float MAX_DIST = 100000.0;
 
-  const scene::SceneData *scene = scenes->scenes[scene_id];
+  const scene::SceneData* scene = scenes->scenes[scene_id];
   const scene::Buffer<scene::Texture>& textures = scenes->textures;
 
   float inter_dist = MAX_DIST;
@@ -168,18 +173,15 @@ intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_i
   float3 normal;
   float2 uv;
 
-  const scene::Material *inter_mat = nullptr;
+  const scene::Material* inter_mat = nullptr;
 
   // Checks meshes intersection
-  for (size_t m = 0; m < scene->meshes.size; ++m)
-  {
-    const auto &mesh = scene->meshes.data[m];
-    for (size_t i = 0; i < mesh.faces.size; ++i)
-    {
-      const auto &face = mesh.faces.data[i];
-      if (intersectTriangle(face, normal, uv, r, inter_dist)
-        && inter_dist < intersection.dist && inter_dist > 0.0)
-      {
+  for (size_t m = 0; m < scene->meshes.size; ++m) {
+    const auto& mesh = scene->meshes.data[m];
+    for (size_t i = 0; i < mesh.faces.size; ++i) {
+      const auto& face = mesh.faces.data[i];
+      if (intersectTriangle(face, normal, uv, r, inter_dist) &&
+          inter_dist < intersection.dist && inter_dist > 0.0) {
         inter_mat = &scene->materials.data[face.material_id];
         intersection.ior = inter_mat->ior;
         intersection.normal = normal;
@@ -194,16 +196,15 @@ intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_i
   }
 
   // At least one intersection has been found.
-  for (unsigned l = 0; l < scene->lights.size; ++l)
-  {
+  for (unsigned l = 0; l < scene->lights.size; ++l) {
     // Checks lights intersection
-    const scene::LightProp & light = scene->lights.data[l];
-    if (intersectSphere(r, light, inter_dist)
-      && inter_dist < intersection.dist && inter_dist >= 0.0)
-    {
+    const scene::LightProp& light = scene->lights.data[l];
+    if (intersectSphere(r, light, inter_dist) &&
+        inter_dist < intersection.dist && inter_dist >= 0.0) {
       intersection.light = &light;
       intersection.dist = inter_dist;
-      intersection.diffuse_col = make_float3(light.color.x, light.color.y, light.color.z);
+      intersection.diffuse_col =
+        make_float3(light.color.x, light.color.y, light.color.z);
       intersection.normal = normalize(light.vec - (inter_dist * r.dir));
       intersection.surface_normal = intersection.surface_normal;
       inter_mat = nullptr;
@@ -212,11 +213,11 @@ intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_i
 
   // Samples texture & computes normal mapping only once,
   // when we are sure this is the closest intersection.
-  if (inter_mat)
-  {
+  if (inter_mat) {
     // Fetches diffuse color from texture
     float4 fetch;
-    sampleTexture(textures, inter_mat->diffuse_spec_map, intersection.uv, fetch);
+    sampleTexture(textures, inter_mat->diffuse_spec_map, intersection.uv,
+                  fetch);
     intersection.diffuse_col.x = fetch.x;
     intersection.diffuse_col.y = fetch.y;
     intersection.diffuse_col.z = fetch.z;
@@ -224,13 +225,13 @@ intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_i
     intersection.specular_col = fetch.w;
 
     // Computes normal perturbated by normal map
-    if (inter_mat->normal_map >= 0)
-    {
+    if (inter_mat->normal_map >= 0) {
       float3 normal;
       sampleTexture(textures, inter_mat->normal_map, intersection.uv, normal);
       intersection.normal = normalize((normal * 2.0f) - 1.0f);
 
-      float3 binormal = normalize(cross(intersection.tangent, intersection.surface_normal));
+      float3 binormal =
+        normalize(cross(intersection.tangent, intersection.surface_normal));
 
       mat3 tbn;
       tbn.x = intersection.tangent;
