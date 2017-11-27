@@ -15,6 +15,8 @@
 #include "driver/interop.h"
 #include "gpu_processor.h"
 
+#include "shaders/raytrace.h"
+
 #include "gui/gui_manager.h"
 
 #include "scene/scene.h"
@@ -173,6 +175,8 @@ main(int argc, char* argv[])
   double delta = 0.0;
   double elapsed = 0.0;
 
+  setupFunctionTables();
+
   while (!glfwWindowShouldClose(window))
   {
     curr_time = glfwGetTime();
@@ -190,6 +194,8 @@ main(int argc, char* argv[])
       processor.getSceneId(), processor.getCubemapId(),
       processor.getSceneItems(), processor.getCubemapItems()
     );
+    gui::GUIManager::inst()->postProcess(processor.getPostProcessId(),
+                                         processor.getPostProcessItems());
     gui::GUIManager::inst()->camera(processor.getCamera(), 0);
 
     if (g_mouse_trapped)
