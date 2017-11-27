@@ -205,8 +205,7 @@ main(int argc, char* argv[])
     glfwPollEvents();
   }
 
-  // cudaDeviceSynchronize();
-  // scene.release();
+  processor.release();
 
   gui::GUIManager::inst()->release();
 

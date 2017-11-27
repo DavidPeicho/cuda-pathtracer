@@ -6,7 +6,7 @@
 #include "../scene/scene.h"
 #include "cutils_math.h"
 
-cudaError_t raytrace(cudaArray_const_t array, const scene::Scenes* scenes,
+cudaError_t raytrace(cudaArray_const_t array, const scene::Scenes& scenes,
                      unsigned int scene_id,
                      const std::vector<scene::Cubemap>& cubemaps,
                      int cubemap_id, const scene::Camera* const cam,

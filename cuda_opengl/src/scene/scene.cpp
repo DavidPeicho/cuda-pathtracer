@@ -391,19 +391,7 @@ Scene::upload_gpu(const std::vector<tinyobj::shape_t>& shapes,
 void
 Scene::release_gpu()
 {
-  // FIRST: Frees texture by first retrieving pointer from the GPU,
-  // and then calling cudaFree to free GPU pointed adress.
-
-  /*size_t nb_tex = _scene_data->textures.size;
-  scene::Texture *textures = new scene::Texture[nb_tex];
-  cudaMemcpy(textures, _scene_data->textures.data,
-    nb_tex * sizeof(scene::Texture), cudaMemcpyDeviceToHost);
-  cudaError_t e = cudaGetLastError();
-
-  for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
-  delete[] textures;*/
-
-  // SECOND: Frees meshes by first retrieving pointer from the GPU,
+  // First: Frees meshes by first retrieving pointer from the GPU,
   // and then calling cudaFree to free GPU pointed adress.
   // Here, we have a depth of 2 regarding the allocation.
 
@@ -418,12 +406,14 @@ Scene::release_gpu()
   }
   delete[] meshes;
 
+  // Frees meshes
+  cudaFree(_scene_data->meshes.data);
   // Frees materials
   cudaFree(_scene_data->materials.data);
   // Frees lights
   cudaFree(_scene_data->lights.data);
 
-  // THIRD: we can now delete the struct pointer.
+  // SECOND: we can now delete the struct pointer.
   cudaFree(_d_scene_data);
 
   delete _scene_data;

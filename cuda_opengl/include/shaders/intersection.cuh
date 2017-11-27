@@ -159,13 +159,13 @@ intersectSphere(const scene::Ray& r, const scene::LightProp& light, float& t)
 /// scene pointed by `scene_id'.
 /// </summary>
 __device__ inline bool
-intersect(const scene::Ray& r, const scene::Scenes* scenes,
+intersect(const scene::Ray& r, const scene::Scenes& scenes,
           unsigned int scene_id, IntersectionData& intersection)
 {
   static const float MAX_DIST = 100000.0;
 
-  const scene::SceneData* scene = scenes->scenes[scene_id];
-  const scene::Buffer<scene::Texture>& textures = scenes->textures;
+  const scene::SceneData* scene = scenes.scenes[scene_id];
+  const scene::Buffer<scene::Texture>& textures = scenes.textures;
 
   float inter_dist = MAX_DIST;
   intersection.dist = MAX_DIST;

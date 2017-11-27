@@ -39,7 +39,7 @@ union rgba_24
 #endif
 
 __device__ inline float3
-radiance(scene::Ray& r, const struct scene::Scenes* scenes,
+radiance(scene::Ray& r, const struct scene::Scenes& scenes,
          unsigned int scene_id, const scene::Camera* const cam,
          curandState* rand_state, int is_static, int static_samples)
 {
@@ -201,7 +201,7 @@ radiance(scene::Ray& r, const struct scene::Scenes* scenes,
 
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
-       const scene::Scenes* scenes, unsigned int scene_id, scene::Camera cam,
+       const scene::Scenes scenes, unsigned int scene_id, scene::Camera cam,
        unsigned int hash_seed, int frame_nb, float3* temporal_framebuffer,
        bool moved, post_process_t post)
 {
@@ -284,7 +284,7 @@ WangHash(unsigned int a)
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::Scenes* scenes,
+raytrace(cudaArray_const_t array, const scene::Scenes& scenes,
          unsigned int scene_id, const std::vector<scene::Cubemap>& cubemaps,
          int cubemap_id, const scene::Camera* const cam,
          const unsigned int width, const unsigned int height,

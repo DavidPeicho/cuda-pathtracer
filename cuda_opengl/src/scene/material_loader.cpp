@@ -213,6 +213,11 @@ MaterialLoader::release()
     if (!_packed_tex.count(pair.first))
       delete[] pair.second.data;
   }
+
+  _packed_tex.clear();
+  _loaded_tex.clear();
+  _materials_gpu.clear();
+  _textures.clear();
 }
 
 int

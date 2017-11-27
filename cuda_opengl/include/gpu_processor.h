@@ -45,6 +45,11 @@ public:
   /// <param name="h">The h.</param>
   void resize(unsigned int w, unsigned int h);
 
+  /// <summary>
+  /// Releases the memory taken by the scenes, the cubemap, etc...
+  /// </summary>
+  void release();
+
   void setKeyState(const unsigned int key, bool state);
 
   inline void setMousePos(const float x, const float y)
@@ -93,13 +98,6 @@ public:
   inline int& getPostProcessId() { return _post_id; }
 
 private:
-  /// <summary>
-  /// Releases the memory allocated by the processor:
-  /// cubemaps, scenes, temporal buffer...
-  /// </summary>
-  void release();
-
-private:
   std::string _asset_folder;
 
   std::vector<std::string> _scene_names;
@@ -115,7 +113,6 @@ private:
   scene::Cubemap _cubemap;
 
   scene::Scenes _scenes;
-  scene::Scenes* _d_scenes;
 
   int _scene_id;
   int _prev_scene_id;

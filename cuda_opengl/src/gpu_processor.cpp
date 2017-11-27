@@ -243,7 +243,6 @@ GPUProcessor::GPUProcessor(const std::string& asset,
                            int height)
   : _asset_folder(asset)
   , _scene_names(scene_names)
-  , _d_scenes(nullptr)
   , _scene_id(0)
   , _prev_scene_id(0)
   , _cubemap_id(0)
@@ -319,14 +318,6 @@ GPUProcessor::init()
 
   std::cout << consumed << " (MB) uploaded!\n" << std::endl;
 
-  // Uploads the global scene. This is really fast,
-  // because we only upload a struct of pointers.
-  cudaMalloc(&_d_scenes, sizeof(scene::Scenes));
-  cudaThrowError();
-  cudaMemcpy(_d_scenes, &_scenes, sizeof(scene::Scenes),
-             cudaMemcpyHostToDevice);
-  cudaThrowError();
-
   // Recaps the overall VRAM consummed. This gives a good idea
   // how streaming is important, especially with textures!
   std::cout << "Uploading completed!\n"
@@ -381,7 +372,7 @@ GPUProcessor::render()
   _interop.map(_stream);
   cudaCheckError();
 
-  raytrace(_interop.getArray(), _d_scenes, _scene_id, _cubemaps, _cubemap_id,
+  raytrace(_interop.getArray(), _scenes, _scene_id, _cubemaps, _cubemap_id,
            &_camera, _interop.width(), _interop.height(), _stream,
            _d_temporal_framebuffer, _moved, _post_id);
 
@@ -423,11 +414,30 @@ GPUProcessor::isKeyPressed(const unsigned int key)
 void
 GPUProcessor::release()
 {
-  for (auto& scene : _raw_scenes)
-    scene.release();
+  // Releases all the scenes.
+  for (auto& scene : _raw_scenes) scene.release();
+  cudaFree(_scenes.scenes);
 
-  cudaFree(_d_scenes);
+  // Releases the textures
+  size_t nb_tex = _scenes.textures.size;
+  scene::Texture *textures = new scene::Texture[nb_tex];
+  cudaMemcpy(
+    textures, _scenes.textures.data,
+    nb_tex * sizeof(scene::Texture), cudaMemcpyDeviceToHost
+  );
+  cudaError_t e = cudaGetLastError();
+
+  for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
+  delete[] textures;
+
+  // Releases the cubemaps
+  for (const auto& cubemap : _cubemaps) cudaFreeArray(cubemap.cubemap);
+  _cubemaps.clear();
+
   cudaFree(_d_temporal_framebuffer);
+
+  // Releases CPU memory
+  scene::MaterialLoader::instance()->release();
 }
 
 } // namespace processor
