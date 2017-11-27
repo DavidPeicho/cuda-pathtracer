@@ -1,8 +1,9 @@
 #include <cuda.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <iostream>
 
+#include <iostream>
+#include <cstring>
 #include <unordered_set>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -108,7 +109,7 @@ namespace processor
         if (!loaded)
           error = "unknown error " + path;
         // Width and height are not the same, the cubecross can not be valid.
-        else if (size != h / 3)
+        else if (size != (unsigned)(h) / 3)
           error = "width and height are not the same";
         // NPOT.
         else if (size & (size - 1))
@@ -149,7 +150,8 @@ namespace processor
         make_cudaExtent(size, size, NB_FACES), cudaArrayCubemap);
       cudaThrowError();
 
-      cudaMemcpy3DParms myparms = { 0 };
+      cudaMemcpy3DParms myparms;
+      std::memset(&myparms, 0, sizeof(cudaMemcpy3DParms));
       myparms.srcPos = make_cudaPos(0, 0, 0);
       myparms.dstPos = make_cudaPos(0, 0, 0);
       myparms.srcPtr = make_cudaPitchedPtr(img, size * sizeof(float) * NB_COMP, size, size);
@@ -253,10 +255,10 @@ namespace processor
                , _scene_id(0)
                , _prev_scene_id(0)
                , _cubemap_id(0)
+               , _post_id(0)
                , _interop(width, height)
                , _d_temporal_framebuffer(nullptr)
                , _moved(false)
-               , _post_id(0)
   {
     cudaStreamCreateWithFlags(&_stream, cudaStreamDefault);
     cudaMalloc(&_d_temporal_framebuffer, width * height * sizeof(float3));
@@ -384,14 +386,18 @@ namespace processor
     _interop.clear();
     if (_raw_scenes.size() == 0) return;
 
-    cudaError_t cuda_err = _interop.map(_stream);
+    _interop.map(_stream);
+    cudaCheckError();
+
     raytrace(
       _interop.getArray(), _d_scenes, _scene_id,
       _cubemaps, _cubemap_id, &_camera,
       _interop.width(), _interop.height(), _stream,
       _d_temporal_framebuffer, _moved, _post_id
     );
-    cuda_err = _interop.unmap(_stream);
+
+    _interop.unmap(_stream);
+    cudaCheckError();
 
     this->setMoved(false);
 
