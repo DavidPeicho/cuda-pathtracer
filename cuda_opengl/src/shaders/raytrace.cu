@@ -17,7 +17,7 @@
 #include "brdf.cuh"
 #include "post_process.cuh"
 
-using post_process_t = float3(*)(float3);
+using post_process_t = float3(*)(const float3&);
 
 post_process_t h_post_process_table[4];
 
@@ -561,20 +561,20 @@ raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scen
 }
 
 __device__ float3
-no_post_process(float3 color)
+no_post_process(const float3 &color)
 {
   return color;
 }
 
 __device__ float3
-grayscale(float3 color)
+grayscale(const float3 &color)
 {
   const float gray = color.x * 0.3 + color.y * 0.59 + color.z * 0.11;
   return make_float3(gray, gray, gray);
 }
 
 __device__ float3
-sepia(float3 color)
+sepia(const float3 &color)
 {
   return make_float3(
       color.x * 0.393 + color.y * 0.769 + color.z * 0.189,
@@ -584,7 +584,7 @@ sepia(float3 color)
 }
 
 __device__ float3
-invert(float3 color)
+invert(const float3 &color)
 {
   return make_float3(1.0 - color.x, 1.0 - color.y, 1.0 - color.z);
 }
