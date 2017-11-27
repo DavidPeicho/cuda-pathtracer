@@ -369,8 +369,8 @@ GPUProcessor::render()
   if (_raw_scenes.size() == 0)
     return;
 
-  _interop.map(_stream);
-  cudaCheckError();
+  const auto error = _interop.map(_stream);
+  if (error != cudaSuccess) return;
 
   raytrace(_interop.getArray(), _scenes, _scene_id, _cubemaps, _cubemap_id,
            &_camera, _interop.width(), _interop.height(), _stream,
