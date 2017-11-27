@@ -300,6 +300,17 @@ __device__ inline float3 radiance(scene::Ray& r,
   // This will be updated at each call to 'intersect'.
   IntersectionData inter;
 
+  if (!is_static)
+	  if (intersect(r, scenes, scene_id, inter))
+		  return inter.diffuse_col;
+	  else
+	  {
+		  // Accumulate Environment map's contribution (approximated as many far away lights)
+		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
+		  return make_float3(val.x, val.y, val.z);
+	  }
+
+
   // Max bounces
   // Bounce more when the camera is not moving
   const int max_bounces = 1 + is_static * (static_samples + 1);
@@ -310,15 +321,8 @@ __device__ inline float3 radiance(scene::Ray& r,
 	  float r1 = curand_uniform(rand_state);
     if (intersect(r, scenes, scene_id, inter))
 	  {
-		  inter.normal = inter.normal;
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = inter.normal;// cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
-
-		  //return oriented_normal;
-
-		  float3 up = make_float3(0.0, 1.0, 0.0);
-		  float3 right = cross(up, inter.normal);
-		  up = cross(inter.normal, right);
 
 		  // Oren-Nayar diffuse
 		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
