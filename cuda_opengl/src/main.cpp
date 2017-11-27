@@ -10,17 +10,14 @@
 #include <iomanip>
 #include <iostream>
 
-#include "driver/cuda_helper.h"
-#include "driver/gpu_info.h"
-#include "driver/interop.h"
-#include "gpu_processor.h"
-
-#include "shaders/raytrace.h"
-
-#include "gui/gui_manager.h"
-
-#include "scene/scene.h"
-#include "utils.h"
+#include <driver/cuda_helper.h>
+#include <driver/gpu_info.h>
+#include <driver/interop.h>
+#include <gpu_processor.h>
+#include <gui/gui_manager.h>
+#include <scene/scene.h>
+#include <shaders/raytrace.h>
+#include <utils/utils.h>
 
 constexpr unsigned int CUBEMAP_IDX = 2;
 

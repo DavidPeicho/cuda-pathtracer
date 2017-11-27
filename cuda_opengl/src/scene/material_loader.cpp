@@ -8,7 +8,7 @@
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb/stb_image_resize.h>
 
-#include "material_loader.h"
+#include <scene/material_loader.h>
 
 namespace scene
 {

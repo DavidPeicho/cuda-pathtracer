@@ -15,30 +15,30 @@
     <ClInclude Include="..\..\..\..\..\Downloads\imgui-1.52\stb_truetype.h" />
     <ClInclude Include="3rd_party\glad\glad.h" />
     <ClInclude Include="3rd_party\KHR\khrplatform.h" />
-    <ClInclude Include="src\gui\gui_manager.h" />
-    <ClInclude Include="src\gui\imconfig.h" />
-    <ClInclude Include="src\gui\imgui.h" />
-    <ClInclude Include="src\gui\imgui_impl_glfw_gl3.h" />
-    <ClInclude Include="src\gui\imgui_internal.h" />
-    <ClInclude Include="src\gui\stb_rect_pack.h" />
-    <ClInclude Include="src\gui\stb_textedit.h" />
-    <ClInclude Include="src\gui\stb_truetype.h" />
-    <ClInclude Include="src\shaders\brdf.cuh" />
-    <ClInclude Include="src\driver\cuda_helper.h" />
-    <ClInclude Include="src\driver\gpu_info.h" />
-    <ClInclude Include="src\driver\interop.h" />
-    <ClInclude Include="src\gpu_processor.h" />
-    <ClInclude Include="src\shaders\post_process.cuh" />
-    <ClInclude Include="src\shaders\raytrace.h" />
-    <ClInclude Include="src\scene\scene.h" />
-    <ClInclude Include="src\scene\scene_data.h" />
-    <ClInclude Include="src\material_loader.h" />
-    <ClInclude Include="src\shaders\cutils_math.h" />
-    <ClInclude Include="src\texture_utils.h" />
-    <ClInclude Include="src\utils.h" />
+    <ClInclude Include="include\gui\gui_manager.h" />
+    <ClInclude Include="include\gui\imconfig.h" />
+    <ClInclude Include="include\gui\imgui.h" />
+    <ClInclude Include="include\gui\imgui_impl_glfw_gl3.h" />
+    <ClInclude Include="include\gui\imgui_internal.h" />
+    <ClInclude Include="include\gui\stb_rect_pack.h" />
+    <ClInclude Include="include\gui\stb_textedit.h" />
+    <ClInclude Include="include\gui\stb_truetype.h" />
+    <ClInclude Include="include\shaders\brdf.cuh" />
+    <ClInclude Include="include\driver\cuda_helper.h" />
+    <ClInclude Include="include\driver\gpu_info.h" />
+    <ClInclude Include="include\driver\interop.h" />
+    <ClInclude Include="include\gpu_processor.h" />
+    <ClInclude Include="include\shaders\post_process.cuh" />
+    <ClInclude Include="include\shaders\raytrace.h" />
+    <ClInclude Include="include\scene\scene.h" />
+    <ClInclude Include="include\scene\scene_data.h" />
+    <ClInclude Include="include\scene\material_loader.h" />
+    <ClInclude Include="include\shaders\cutils_math.h" />
+    <ClInclude Include="include\utils\texture_utils.h" />
+    <ClInclude Include="include\utils\utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\glad.cpp" />
+    <ClCompile Include="src\driver\glad.cpp" />
     <ClCompile Include="src\driver\gpu_info.cpp" />
     <ClCompile Include="src\driver\interop.cpp" />
     <ClCompile Include="src\gpu_processor.cpp" />
@@ -47,10 +47,10 @@
     <ClCompile Include="src\gui\imgui_draw.cpp" />
     <ClCompile Include="src\gui\imgui_impl_glfw_gl3.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\material_loader.cpp" />
+    <ClCompile Include="src\scene\material_loader.cpp" />
     <ClCompile Include="src\scene\scene.cpp" />
-    <ClCompile Include="src\texture_utils.cpp" />
-    <ClCompile Include="src\utils.cpp" />
+    <ClCompile Include="src\utils\texture_utils.cpp" />
+    <ClCompile Include="src\utils\utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\shaders\raytrace.cu">
@@ -100,7 +100,7 @@
     <LibraryPath>$(ProjectDir)\3rd_party\libs\GLFW;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir)\3rd_party\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)\3rd_party\include;$(ProjectDir)\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)\3rd_party\libs\GLFW;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

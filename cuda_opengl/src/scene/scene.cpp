@@ -15,14 +15,13 @@
 
 #include <unordered_map>
 
-#include "../driver/cuda_helper.h"
-#include "../material_loader.h"
-#include "../shaders/cutils_math.h"
-#include "../utils.h"
+#include <driver/cuda_helper.h>
+#include <scene/material_loader.h>
+#include <shaders/cutils_math.h>
+#include <utils/utils.h>
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "scene.h"
-
+#include <scene/scene.h>
 
 namespace scene
 {

@@ -2,15 +2,14 @@
 # include <windows.h>
 #endif
 
+#include <cstring>
 #include <cuda_gl_interop.h>
 #include <stdexcept>
-#include <cstring>
 
-#include "gpu_info.h"
+#include <driver/gpu_info.h>
 
 namespace driver
 {
-
   GPUInfo* GPUInfo::_instance = nullptr;
 
   GPUInfo::GPUInfo()

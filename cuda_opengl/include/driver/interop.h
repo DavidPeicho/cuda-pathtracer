@@ -4,9 +4,9 @@
 # include <windows.h>
 #endif
 
-#include <cuda_runtime.h>
 #include <glad/glad.h>
 
+#include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
 
 namespace driver

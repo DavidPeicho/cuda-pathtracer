@@ -1,10 +1,10 @@
-#include <glad/glad.h>
 #include <string>
 #include <vector>
 
-#include "imgui.h"
-#include "imgui_impl_glfw_gl3.h"
-#include "gui_manager.h"
+#include <glad/glad.h>
+#include <gui/gui_manager.h>
+#include <gui/imgui.h>
+#include <gui/imgui_impl_glfw_gl3.h>
 
 namespace gui
 {

@@ -12,10 +12,10 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
-#include "imgui.h"
+#include <gui/imgui.h>
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define IMGUI_DEFINE_PLACEMENT_NEW
-#include "imgui_internal.h"
+#include <gui/imgui_internal.h>
 
 #include <stdio.h>      // vsnprintf, sscanf, printf
 #if !defined(alloca)
@@ -86,7 +86,7 @@ namespace IMGUI_STB_NAMESPACE
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
 #endif
-#include "stb_rect_pack.h"
+#include <gui/stb_rect_pack.h>
 
 #define STBTT_malloc(x,u)  ((void)(u), ImGui::MemAlloc(x))
 #define STBTT_free(x,u)    ((void)(u), ImGui::MemFree(x))
@@ -97,7 +97,7 @@ namespace IMGUI_STB_NAMESPACE
 #else
 #define STBTT_DEF extern
 #endif
-#include "stb_truetype.h"
+#include <gui/stb_truetype.h>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
@@ -1994,19 +1994,19 @@ void ImFont::AddGlyph(ImWchar codepoint, float x0, float y0, float x1, float y1,
     Glyphs.resize(Glyphs.Size + 1);
     ImFontGlyph& glyph = Glyphs.back();
     glyph.Codepoint = (ImWchar)codepoint;
-    glyph.X0 = x0; 
-    glyph.Y0 = y0; 
-    glyph.X1 = x1; 
+    glyph.X0 = x0;
+    glyph.Y0 = y0;
+    glyph.X1 = x1;
     glyph.Y1 = y1;
-    glyph.U0 = u0; 
-    glyph.V0 = v0; 
-    glyph.U1 = u1; 
+    glyph.U0 = u0;
+    glyph.V0 = v0;
+    glyph.U1 = u1;
     glyph.V1 = v1;
     glyph.AdvanceX = advance_x + ConfigData->GlyphExtraSpacing.x;  // Bake spacing into AdvanceX
 
     if (ConfigData->PixelSnapH)
         glyph.AdvanceX = (float)(int)(glyph.AdvanceX + 0.5f);
-    
+
     // Compute rough surface usage metrics (+1 to account for average padding, +0.99 to round)
     MetricsTotalSurface += (int)((glyph.U1 - glyph.U0) * ContainerAtlas->TexWidth + 1.99f) * (int)((glyph.V1 - glyph.V0) * ContainerAtlas->TexHeight + 1.99f);
 }

@@ -26,11 +26,7 @@ set(GLFW_DIR glfw)
 
 include_directories(
   ${SLN_DIR}/3rd_party/include
-  ${SLN_DIR}/src
-  ${SLN_DIR}/src/shaders
-  ${SLN_DIR}/src/driver
-  ${SLN_DIR}/src/scene
-  ${SLN_DIR}/src/gui
+  ${SLN_DIR}/include
   ${GLFW_INSTALL_LOCATION}/include
 )
 

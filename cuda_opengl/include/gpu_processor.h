@@ -3,11 +3,11 @@
 #include <cuda.h>
 #include <vector>
 
-#include "driver/interop.h"
-#include "driver/gpu_info.h"
+#include <driver/interop.h>
+#include <driver/gpu_info.h>
 
-#include "scene/scene.h"
-#include "shaders/cutils_math.h"
+#include <scene/scene.h>
+#include <shaders/cutils_math.h>
 
 #ifndef M_PI
 # define M_PI 3.14159265358979323846

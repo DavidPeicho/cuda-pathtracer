@@ -1,6 +1,8 @@
 #pragma once
 
-#include "../scene/scene_data.h"
+//#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <scene/scene_data.h>
 
 namespace gui
 {

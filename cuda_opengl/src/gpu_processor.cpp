@@ -1,23 +1,20 @@
 #include <cuda.h>
-#include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <iostream>
 
 #include <unordered_set>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
-#include "driver/cuda_helper.h"
+#include <driver/cuda_helper.h>
 
-#include "gpu_processor.h"
-
-#include "material_loader.h"
-
-#include "texture_utils.h"
-#include "utils.h"
-
-#include "shaders/raytrace.h"
+#include <gpu_processor.h>
+#include <scene/material_loader.h>
+#include <shaders/raytrace.h>
+#include <utils/texture_utils.h>
+#include <utils/utils.h>
 
 namespace processor
 {

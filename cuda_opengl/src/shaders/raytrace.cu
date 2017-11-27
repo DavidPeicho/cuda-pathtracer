@@ -1,21 +1,17 @@
-#include <cuda_runtime.h>
-
-#include <math.h>
-#include <math_functions.h>
-
 #include <curand.h>
 #include <curand_kernel.h>
-
-#include <stdbool.h>
-
-#include "../utils.h"
-#include "../scene/scene_data.h"
-#include "../driver/cuda_helper.h"
+#include <cuda_runtime.h>
 
 #include <iostream>
+#include <math.h>
+#include <stdbool.h>
 
-#include "brdf.cuh"
-#include "post_process.cuh"
+#include <driver/cuda_helper.h>
+#include <math_functions.h>
+#include <scene/scene_data.h>
+#include <shaders/brdf.cuh>
+#include <shaders/post_process.cuh>
+#include <utils/utils.h>
 
 using post_process_t = float3(*)(const float3&);
 
