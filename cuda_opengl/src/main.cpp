@@ -1,5 +1,5 @@
 #ifdef _WIN64
-# include <windows.h>
+#include <windows.h>
 #endif
 
 #include <glad/glad.h>
@@ -24,10 +24,9 @@ constexpr unsigned int CUBEMAP_IDX = 2;
 static bool g_mouse_trapped = true;
 
 static void
-glfw_init(GLFWwindow **window, const int width, const int height)
+glfw_init(GLFWwindow** window, const int width, const int height)
 {
-	if (!glfwInit())
-  {
+  if (!glfwInit()) {
     std::cerr << "artracer: failed to initialize GLFW." << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -44,12 +43,11 @@ glfw_init(GLFWwindow **window, const int width, const int height)
 
   *window = glfwCreateWindow(width, height, "Artracer", NULL, NULL);
 
-	if (*window == NULL)
-	{
+  if (*window == NULL) {
     std::cerr << "artracer: failed to open GLFW window." << std::endl;
-		glfwTerminate();
-		exit(EXIT_FAILURE);
-	}
+    glfwTerminate();
+    exit(EXIT_FAILURE);
+  }
 
   glfwMakeContextCurrent(*window);
   gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
@@ -60,31 +58,33 @@ glfw_init(GLFWwindow **window, const int width, const int height)
 static void
 glfw_window_size_callback(GLFWwindow* window, int width, int height)
 {
-	processor::GPUProcessor* const processor =
-		(processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
+  processor::GPUProcessor* const processor =
+    (processor::GPUProcessor * const)glfwGetWindowUserPointer(window);
 
   processor->resize(width, height);
 }
 
 void
-glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+glfw_key_callback(GLFWwindow* window, int key, int scancode, int action,
+                  int mods)
 {
   static char keys[1024];
 
-  (void) scancode;
-  (void) mods;
+  (void)scancode;
+  (void)mods;
 
   processor::GPUProcessor* const processor =
-    (processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
+    (processor::GPUProcessor * const)glfwGetWindowUserPointer(window);
 
-	if (key < 0 || key >= 1024) return;
+  if (key < 0 || key >= 1024)
+    return;
 
-  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS && !keys[GLFW_KEY_ESCAPE])
-  {
+  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS &&
+      !keys[GLFW_KEY_ESCAPE]) {
     g_mouse_trapped = !g_mouse_trapped;
-    glfwSetInputMode(window, GLFW_CURSOR, g_mouse_trapped ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_NORMAL);
-  }
-  else
+    glfwSetInputMode(window, GLFW_CURSOR,
+                     g_mouse_trapped ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_NORMAL);
+  } else
     processor->setKeyState(key, action != GLFW_RELEASE);
 
   keys[key] = action != GLFW_RELEASE;
@@ -93,13 +93,14 @@ glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void
 glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
-	processor::GPUProcessor* const processor =
-		(processor::GPUProcessor* const)glfwGetWindowUserPointer(window);
+  processor::GPUProcessor* const processor =
+    (processor::GPUProcessor * const)glfwGetWindowUserPointer(window);
 
-  if (!g_mouse_trapped) return;
+  if (!g_mouse_trapped)
+    return;
 
-	processor->setMoved(true);
-	processor->setMousePos((float)xpos, (float)ypos);
+  processor->setMoved(true);
+  processor->setMousePos((float)xpos, (float)ypos);
 }
 
 /// <summary>
@@ -110,15 +111,15 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 /// <param name="start">The first index at which first scene is located</param>
 /// <returns></returns>
 std::vector<std::string>
-buildScenesList(int argc, char *argv[], unsigned int start)
+buildScenesList(int argc, char* argv[], unsigned int start)
 {
   std::vector<std::string> scenes;
 
   int nb_scenes = argc - start;
-  for (int i = 0; i < nb_scenes ; ++i)
-  {
+  for (int i = 0; i < nb_scenes; ++i) {
     std::string file = argv[i + start];
-    if (!file.empty()) scenes.push_back(file);
+    if (!file.empty())
+      scenes.push_back(file);
   }
 
   return scenes;
@@ -127,10 +128,10 @@ buildScenesList(int argc, char *argv[], unsigned int start)
 int
 main(int argc, char* argv[])
 {
-  if (argc < 3)
-  {
+  if (argc < 3) {
     std::cerr << "artracer: missing scene argument.\n";
-    std::cerr << "usage: artracer ASSET_FOLDER [SCENE 1] [SCENE2] ..." << std::endl;
+    std::cerr << "usage: artracer ASSET_FOLDER [SCENE 1] [SCENE2] ..."
+              << std::endl;
     return 1;
   }
 
@@ -168,8 +169,7 @@ main(int argc, char* argv[])
   // Binds post processing functions from the Kernel to the host
   setupFunctionTables();
 
-  while (!glfwWindowShouldClose(window))
-  {
+  while (!glfwWindowShouldClose(window)) {
     curr_time = glfwGetTime();
     delta = curr_time - last_time;
     last_time = curr_time;
@@ -183,14 +183,14 @@ main(int argc, char* argv[])
     gui::GUIManager::inst()->begin();
     gui::GUIManager::inst()->info(
       processor.getSceneId(), processor.getCubemapId(),
-      processor.getSceneItems(), processor.getCubemapItems()
-    );
+      processor.getSceneItems(), processor.getCubemapItems());
     gui::GUIManager::inst()->postProcess(processor.getPostProcessId(),
                                          processor.getPostProcessItems());
     gui::GUIManager::inst()->camera(processor.getCamera(), 0);
 
     if (g_mouse_trapped)
-      glfwSetCursorPos(window, (double)interop.half_width(), (double)interop.half_height());
+      glfwSetCursorPos(window, (double)interop.half_width(),
+                       (double)interop.half_height());
 
     elapsed += delta;
 
@@ -201,19 +201,19 @@ main(int argc, char* argv[])
     processor.render();
     gui::GUIManager::inst()->render();
 
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-	}
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+  }
 
-	//cudaDeviceSynchronize();
-	//scene.release();
+  // cudaDeviceSynchronize();
+  // scene.release();
 
   gui::GUIManager::inst()->release();
 
-	glfwDestroyWindow(window);
-	glfwTerminate();
+  glfwDestroyWindow(window);
+  glfwTerminate();
 
   cudaDeviceReset();
 
-	exit(EXIT_SUCCESS);
+  exit(EXIT_SUCCESS);
 }
