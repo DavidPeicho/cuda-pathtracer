@@ -11,7 +11,7 @@ template <typename T>
 struct __align__(16) Buffer
 {
   unsigned int size;
-  T* data;
+  T* data = nullptr;
 };
 
 /// <summary>

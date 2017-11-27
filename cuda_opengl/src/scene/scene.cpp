@@ -287,6 +287,7 @@ Scene::Scene(const std::string& filepath)
   : _filepath(filepath)
   , _uploaded(false)
   , _ready(false)
+  , _scene_data(nullptr)
   , _d_scene_data(nullptr)
 {
 }
@@ -294,7 +295,8 @@ Scene::Scene(const std::string& filepath)
 Scene::Scene(const std::string&& filepath)
   : _filepath(filepath)
   , _uploaded(false)
-  , _ready{ false }
+  , _ready(false)
+  , _scene_data(nullptr)
   , _d_scene_data(nullptr)
 {
 }
