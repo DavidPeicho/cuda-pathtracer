@@ -304,8 +304,11 @@ __device__ inline float3 radiance(scene::Ray& r,
 	  float r1 = curand_uniform(rand_state);
     if (intersect(r, scenes, scene_id, inter))
 	  {
+		  inter.normal = inter.normal;
 		  float cos_theta = dot(inter.normal, r.dir);
 		  oriented_normal = inter.normal;// cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+
+		  //return oriented_normal;
 
 		  float3 up = make_float3(0.0, 1.0, 0.0);
 		  float3 right = cross(up, inter.normal);
@@ -316,7 +319,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 		  // Specular ray
 		  // Computed everytime and then used to simulate roughness by concentrating rays towards it
-		  float3 spec = reflect(r.dir, inter.normal);
+		  float3 spec = normalize(reflect(r.dir, inter.normal));
 		  float PDF = pdf_lambert(); // Divided by PI
 		  //Lambert BRDF/PDF
 		  float3 BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
@@ -359,9 +362,10 @@ __device__ inline float3 radiance(scene::Ray& r,
 		  {
 			  // Transmision
 			  // n1: IOR of exterior medium
-			  float n1 = 1.0f; // sin theta2
-			  // n1: IOR of entering medium
-			  float n2 = inter.ior; // sin theta1
+			  float n2 = 1.0f; // sin theta2
+			  // n2: IOR of entering medium
+			  float n1 = inter.ior; // sin theta1
+			  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 			  float c1 = dot(oriented_normal, r.dir);
 			  bool entering = dot(inter.normal, oriented_normal) > 0;
 			  // Snell's Law
@@ -374,7 +378,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 			  {
 				  r.origin += oriented_normal * inter.dist / 100.f;
 
-				  //return glm::vec3(0.0f, 1.0f, 0.0f);
+				  //return make_float3(1.0f, 0.0f, 0.0f);
 				  r.dir = spec;
 			  }
 			  else
@@ -399,6 +403,9 @@ __device__ inline float3 radiance(scene::Ray& r,
 					  r.origin += oriented_normal * inter.dist / 100.f;
 
 					  r.dir = spec;// mix(d, spec, inter.specular_col);
+
+
+					  //return make_float3(0.0f, 1.0f, 0.0f);
 				  }
 				  else // Transmission
 				  {
@@ -412,6 +419,7 @@ __device__ inline float3 radiance(scene::Ray& r,
 					  r.origin += oriented_normal * inter.dist / 10000.f;
 
 					  r.dir = T;
+					  //return make_float3(0.0f, 0.0f, 1.0f);
 				  }
 			  }
 		  }
