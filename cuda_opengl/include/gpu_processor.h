@@ -27,12 +27,26 @@ namespace processor
       void
       init();
 
+      /// <summary>
+      /// Updates the world (camera, etc...)
+      /// </summary>
+      /// <param name="delta">Game time.</param>
       void
       update(float delta);
 
+      /// <summary>
+      /// Renders the scene by running the raytrace kernel,
+      /// and using the result in an OpenGL interop.
+      /// </summary>
       void
       render();
 
+      /// <summary>
+      /// Whenever a resize event occurs, we should resize
+      /// the OpenGL interop buffers.
+      /// </summary>
+      /// <param name="w">The w.</param>
+      /// <param name="h">The h.</param>
       void
       resize(unsigned int w, unsigned int h);
 
@@ -117,6 +131,10 @@ namespace processor
       }
 
     private:
+      /// <summary>
+      /// Releases the memory allocated by the processor:
+      /// cubemaps, scenes, temporal buffer...
+      /// </summary>
       void
       release();
 
@@ -138,7 +156,6 @@ namespace processor
       };
 
       scene::Camera _camera;
-      // These two attributes are used to render a cubemap.
       scene::Cubemap _cubemap;
 
       scene::Scenes _scenes;
@@ -153,6 +170,10 @@ namespace processor
       driver::GPUInfo _gpu_info;
       cudaStream_t _stream;
 
+      /// <summary>
+      /// The temporal buffer is used to accumulate several
+      /// frame, allowing to converge when there is no move.
+      /// </summary>
       float3* _d_temporal_framebuffer;
 
       bool _keys[65536];

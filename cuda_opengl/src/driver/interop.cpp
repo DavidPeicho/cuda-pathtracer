@@ -76,8 +76,7 @@ namespace driver
   {
     cudaError_t cuda_err = cudaSuccess;
 
-    if (!_allocated)
-      return cuda_err;
+    if (!_allocated) return cuda_err;
 
     for (int i = 0; i < 2; i++)
     {

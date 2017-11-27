@@ -8,7 +8,9 @@
 
 namespace driver
 {
-
+  /// <summary>
+  /// Encapsulates information about an used GPU.
+  /// </summary>
   class GPUInfo
   {
     struct GPU

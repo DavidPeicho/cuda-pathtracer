@@ -11,6 +11,10 @@
 
 namespace driver
 {
+  /// <summary>
+  /// Encapsulates the logic to communicate between
+  /// CUDA and OpenGL
+  /// </summary>
   class Interop
   {
     public:
@@ -28,12 +32,19 @@ namespace driver
       cudaError_t
       clean();
 
+      /// <summary>
+      /// Swaps the framebuffers for double buffering.
+      /// </summary>
       void
       swap();
 
       void
       clear();
 
+      /// <summary>
+      /// Copies the data of the front framebuffer
+      /// to the framebuffer 0 (the screen)
+      /// </summary>
       void
       blit();
 
@@ -69,8 +80,20 @@ namespace driver
       bool _allocated;
 
       int _index;
+
+      /// <summary>
+      /// Framebuffers for double buffering.
+      /// </summary>
       GLuint _fb[2];
+      /// <summary>
+      /// RenderBuffers to write in frambuffers.
+      /// </summary>
       GLuint _rb[2];
+
+      /// <summary>
+      /// CUDA resources making the link between the CUDA
+      /// memory and the OpenGL memory.
+      /// </summary>
       cudaGraphicsResource *_d_cgr[2];
       cudaArray *_d_ca[2];
   };

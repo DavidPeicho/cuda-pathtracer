@@ -9,6 +9,14 @@
 
 namespace scene
 {
+  /// <summary>
+  /// Singleton loading materials. This is used to keep
+  /// track of all the texture loaded, pack them, and
+  /// improve memory usage.
+  ///
+  /// Whenever a texture is already loaded, it will not
+  /// be loaded again.
+  /// </summary>
   class MaterialLoader
   {
     public:
@@ -22,13 +30,27 @@ namespace scene
       }
 
     public:
+      /// <summary>
+      /// Sets data to use for the next loading.
+      /// </summary>
+      /// <param name="tiny_materials">TinyObjLoader materials</param>
+      /// <param name="mtl_folder">Base folder containing the assets (MTL, etc..)</param>
+      /// <returns></returns>
       MaterialLoader*
       set(const std::vector<tinyobj::material_t> *tiny_materials,
           const std::string mtl_folder);
 
+      /// <summary>
+      /// Loads the data passed to the `set()' method and
+      /// returns the associated material.
+      /// </summary>
+      /// <param name="">Contains the loaded material, ready to be upload to the GPU.</param>
       void
       load(std::vector<Material>&);
 
+      /// <summary>
+      /// Releases CPU texture memory.
+      /// </summary>
       void
       release();
 

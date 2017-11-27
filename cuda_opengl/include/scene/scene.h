@@ -8,8 +8,13 @@
 
 namespace scene
 {
-  // TODO: Remove CPU usage which makes a lot of garbage
-  // as we do not support CPU anymore.
+  /// <summary>
+  /// Loads primitives of a given scene using the
+  /// TinyObjLoader library.
+  ///
+  /// When the scene is uploaded to the GPU, it is
+  /// released from the CPU to reduce memory overhead.
+  /// </summary>
   class Scene
   {
     public:
@@ -17,9 +22,16 @@ namespace scene
       Scene(const std::string&& filepath);
 
     public:
+      /// <summary>
+      /// Uploads the CPU scene to the GPU.
+      /// </summary>
+      /// <param name="camera">Not used anymore.</param>
       void
       upload(scene::Camera *camera);
 
+      /// <summary>
+      /// Releases the scene from the GPU.
+      /// </summary>
       void
       release();
 
@@ -77,6 +89,9 @@ namespace scene
       bool _ready;
       std::string _load_error;
 
+      /// <summary>
+      /// Initial data of the camera.
+      /// </summary>
       scene::Camera _init_camera;
 
       scene::SceneData *_scene_data;

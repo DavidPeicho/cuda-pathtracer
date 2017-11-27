@@ -78,6 +78,13 @@ namespace scene
       return result;
     }
 
+    /// <summary>
+    /// Checks if a texture is loaded, and if it is not,
+    /// it will load it and add it to the tracked list.
+    /// </summary>
+    /// <param name="tex">Name of the texture to load.</param>
+    /// <param name="base_folder">Path to the folder of resources.</param>
+    /// <param name="loaded_tex">Map containing all the loaded texture.</param>
     void
     checkAndupload(const std::string& tex, const std::string& base_folder,
         std::unordered_map<std::string, Texture>& loaded_tex)
@@ -113,6 +120,11 @@ namespace scene
       };
     }
 
+    /// <summary>
+    /// Creates a 1x1 texture of 3 channel with a default color.
+    /// </summary>
+    /// <param name="default_v">The default color.</param>
+    /// <returns>The newly allocated texture.</returns>
     Texture
     createUnitTex(float3 default_v)
     {
@@ -124,6 +136,11 @@ namespace scene
       return { 1, 1, 3, data };
     }
 
+    /// <summary>
+    /// Creates a 1x1 texture of 4 channels with a default color.
+    /// </summary>
+    /// <param name="default_v">The default color.</param>
+    /// <returns>The newly allocated texture.</returns>
     Texture
     createUnitTex(float4 default_v)
     {

@@ -28,6 +28,7 @@
     <ClInclude Include="include\driver\gpu_info.h" />
     <ClInclude Include="include\driver\interop.h" />
     <ClInclude Include="include\gpu_processor.h" />
+    <ClInclude Include="include\shaders\intersection.cuh" />
     <ClInclude Include="include\shaders\post_process.cuh" />
     <ClInclude Include="include\shaders\raytrace.h" />
     <ClInclude Include="include\scene\scene.h" />

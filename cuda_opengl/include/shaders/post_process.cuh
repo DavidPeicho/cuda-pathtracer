@@ -7,6 +7,10 @@
 
 #include "../driver/cuda_helper.h"
 
+/// <summary>
+/// Applies the tone mapping used in the Uncharted game.
+/// </summary>
+/// <param name="x">Color value to tonemap.</param>
 __device__ inline float3
 uncharted_tonemap(float3 x)
 {
@@ -20,6 +24,10 @@ uncharted_tonemap(float3 x)
   return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
+/// <summary>
+/// Changes the pixel exposure using the `uncharted_tonemap()'.
+/// </summary>
+/// <param name="x">Color of the pixel.</param>
 __device__ inline float3
 exposure(float3 color)
 {
@@ -32,6 +40,12 @@ exposure(float3 color)
   return curr * white_scale;
 }
 
+/// <summary>
+/// Applies a depth of field to a given ray.
+/// </summary>
+/// <param name="r">Initial ray (origin and direction).</param>
+/// <param name="cam">Camera used to compute the DOF.</param>
+/// <param name="rand_state">Random state.</param>
 __device__ inline void
 camera_dof(scene::Ray& r, const scene::Camera& cam, curandState *rand_state)
 {

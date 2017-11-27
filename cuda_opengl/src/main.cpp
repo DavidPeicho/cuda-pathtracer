@@ -24,11 +24,11 @@ constexpr unsigned int CUBEMAP_IDX = 2;
 static bool g_mouse_trapped = true;
 
 static void
-glfw_init(GLFWwindow** window, const int width, const int height)
+glfw_init(GLFWwindow **window, const int width, const int height)
 {
 	if (!glfwInit())
   {
-    std::cerr << "artracer: failed to initialize GLFW" << std::endl;
+    std::cerr << "artracer: failed to initialize GLFW." << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -42,11 +42,11 @@ glfw_init(GLFWwindow** window, const int width, const int height)
 
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  *window = glfwCreateWindow(width, height, "GLFW / CUDA Interop", NULL, NULL);
+  *window = glfwCreateWindow(width, height, "Artracer", NULL, NULL);
 
 	if (*window == NULL)
 	{
-    std::cerr << "artracer: failed to open GLFW window" << std::endl;
+    std::cerr << "artracer: failed to open GLFW window." << std::endl;
 		glfwTerminate();
 		exit(EXIT_FAILURE);
 	}
@@ -102,8 +102,15 @@ glfw_mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	processor->setMousePos((float)xpos, (float)ypos);
 }
 
+/// <summary>
+/// Builds an array containing all the scene names.
+/// </summary>
+/// <param name="argc">The number of arguments given to the main.</param>
+/// <param name="argv">The arguments given to the main.</param>
+/// <param name="start">The first index at which first scene is located</param>
+/// <returns></returns>
 std::vector<std::string>
-buildScenesList(int argc, const char *argv[], unsigned int start)
+buildScenesList(int argc, char *argv[], unsigned int start)
 {
   std::vector<std::string> scenes;
 
@@ -124,13 +131,10 @@ main(int argc, char* argv[])
   {
     std::cerr << "artracer: missing scene argument.\n";
     std::cerr << "usage: artracer ASSET_FOLDER [SCENE 1] [SCENE2] ..." << std::endl;
-    //return 1;
+    return 1;
   }
-  (void) argv;
 
   constexpr int ASSET_FOLDER_IDX = 1;
-  /*constexpr int WINDOW_W = 1344;
-  constexpr int WINDOW_H = 756;*/
   constexpr int WINDOW_W = 960;
   constexpr int WINDOW_H = 540;
 
@@ -138,7 +142,6 @@ main(int argc, char* argv[])
   glfw_init(&window, WINDOW_W, WINDOW_H);
 
   gui::GUIManager::inst()->init(window);
-  //scene::Scene scene(argv[1]);
 
   int width = 0;
   int height = 0;
@@ -148,20 +151,10 @@ main(int argc, char* argv[])
   glfwSetKeyCallback(window, glfw_key_callback);
   glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
+  auto asset_folder = argv[ASSET_FOLDER_IDX];
+  auto scenes = buildScenesList(argc, argv, ASSET_FOLDER_IDX + 1);
   // Creates the processor in charge of loading the assets, by creating
   // the scenes from the command line, and running the kernel each loop.
-  // DEBUG
-  const char* toto[] =
-  {
-    "toto", "assets", "island.scene", "color_sample.scene",
-    "indoor.scene", "crate_land.scene"
-  };
-  // END DEBUG
-  auto asset_folder = toto[ASSET_FOLDER_IDX];
-  std::vector<std::string> scenes;
-
-  scenes = buildScenesList(6, toto, ASSET_FOLDER_IDX + 1);
-
   processor::GPUProcessor processor(asset_folder, scenes, WINDOW_W, WINDOW_H);
   processor.init(); // This will upload the data.
   glfwSetWindowUserPointer(window, &processor);
@@ -172,6 +165,7 @@ main(int argc, char* argv[])
   double delta = 0.0;
   double elapsed = 0.0;
 
+  // Binds post processing functions from the Kernel to the host
   setupFunctionTables();
 
   while (!glfwWindowShouldClose(window))

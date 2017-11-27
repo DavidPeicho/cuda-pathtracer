@@ -6,6 +6,10 @@
 
 namespace gui
 {
+  /// <summary>
+  /// Singleton of the UI. This can be use everywhere
+  /// in the code.
+  /// </summary>
   class GUIManager
   {
     public:
