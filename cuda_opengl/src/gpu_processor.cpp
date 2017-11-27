@@ -425,7 +425,7 @@ GPUProcessor::release()
     textures, _scenes.textures.data,
     nb_tex * sizeof(scene::Texture), cudaMemcpyDeviceToHost
   );
-  cudaError_t e = cudaGetLastError();
+  cudaCheckError();
 
   for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
   delete[] textures;
