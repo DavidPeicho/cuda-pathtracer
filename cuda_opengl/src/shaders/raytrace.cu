@@ -1,23 +1,20 @@
 #include <cuda_runtime.h>
-
-#include <math.h>
-#include <math_functions.h>
-
 #include <curand.h>
 #include <curand_kernel.h>
 
+#include <iostream>
+#include <math.h>
 #include <stdbool.h>
 
-#include "../utils.h"
-#include "../scene/scene_data.h"
-#include "../driver/cuda_helper.h"
+#include <driver/cuda_helper.h>
+#include <math_functions.h>
+#include <scene/scene_data.h>
+#include <shaders/brdf.cuh>
+#include <shaders/intersection.cuh>
+#include <shaders/post_process.cuh>
+#include <utils/utils.h>
 
-#include <iostream>
-
-#include "brdf.cuh"
-#include "post_process.cuh"
-
-using post_process_t = float3(*)(const float3&);
+using post_process_t = float3 (*)(const float3&);
 
 post_process_t h_post_process_table[4];
 
@@ -26,271 +23,25 @@ texture<float4, cudaTextureTypeCubemap> cubemap_ref;
 
 union rgba_24
 {
-	uint1 b32;
+  uint1 b32;
 
-	struct
-	{
-		unsigned  r : 8;
-		unsigned  g : 8;
-		unsigned  b : 8;
-		unsigned  a : 8;
-	};
-};
-
-struct __align__(8) IntersectionData
-{
-  float3 normal;
-  float3 surface_normal;
-  float3 tangent;
-  float3 diffuse_col;
-  float2 uv;
-  const scene::LightProp *light;
-  float dist;
-  float specular_col;
-  float ior;
-};
-
-/*
-  The sampleTexture() method uses overloading to sample
-  several type of texture easily. It allows us to sample
-  3-channels texture as well as 1-channel textures.
-*/
-
-__device__ inline int
-getTextureIdx(const scene::Texture &texture, const float2& uv)
-{
-  int x = uv.x * (texture.w - 1);
-  int y = uv.y * (texture.h - 1);
-  return (y * texture.w + x) * texture.nb_chan;
-}
-
-__device__ inline void
-sampleTexture(const scene::Buffer<scene::Texture>& textures,
-  int tex_id, const float2& uv, float3& out)
-{
-  const scene::Texture &tex = textures.data[tex_id];
-  int idx = getTextureIdx(tex, uv);
-
-  out.x = tex.data[idx];
-  out.y = tex.data[idx + 1];
-  out.z = tex.data[idx + 2];
-}
-
-__device__ inline void
-sampleTexture(const scene::Buffer<scene::Texture>& textures,
-  int tex_id, const float2& uv, float4& out)
-{
-  const scene::Texture &tex = textures.data[tex_id];
-  int idx = getTextureIdx(tex, uv);
-
-  out.x = tex.data[idx];
-  out.y = tex.data[idx + 1];
-  out.z = tex.data[idx + 2];
-  out.w = tex.data[idx + 3];
-}
-
-HOST_DEVICE inline scene::Ray
-generateRay(const int x, const int y,
-            const int half_w, const int half_h, scene::Camera &cam)
-{
-  float screen_dist = half_w / tanf(cam.fov_x * 0.5f);
-
-  scene::Ray ray;
-  ray.origin = cam.position;
-
-  cam.u = normalize(cross(cam.dir, make_float3(0.0, -1.0, 0.0)));
-  cam.v = normalize(cross(cam.u, cam.dir));
-
-  cam.u *= -1.0;
-
-  float3 screen_pos = cam.position + (cam.dir * screen_dist)
-    + (cam.u * (float)(x - half_w)) + (cam.v * (float)(y - half_h));
-
-  ray.dir = screen_pos - cam.position;
-  ray.dir = normalize(ray.dir);
-
-  return ray;
-}
-
-__device__ inline bool
-intersectTriangle(const scene::Face &face, float3 &out_normal,
-  float2 &out_uv, const scene::Ray &ray, float& t)
-{
-	float3 v0v1 = face.vertices[1] - face.vertices[0];
-  float3 v0v2 = face.vertices[2] - face.vertices[0];
-  float3 p_vec = cross(ray.dir, v0v2);
-	float det = dot(v0v1, p_vec);
-	if (det < 0.0000001)
-		return false;
-
-	float inv_det = __fdividef(1.f, det);
-	float3 t_vec = ray.origin - face.vertices[0];
-	float u = dot(t_vec, p_vec) * inv_det;
-	if (u < 0 || u > 1) return false;
-
-	float3 qvec = cross(t_vec, v0v1);
-	float v = dot(ray.dir, qvec) * inv_det;
-	if (v < 0 || u + v > 1) return false;
-
-  // Interpolates normals
-  out_normal = (1.0f - u - v) * face.normals[0] + u * face.normals[1] + v * face.normals[2];
-  //out_normal = face.normals[0];
-  // Interpolates uvs
-  out_uv = (1.0f - u - v) * face.texcoords[0] + u * face.texcoords[1] + v * face.texcoords[2];
-  out_uv = mod(out_uv, 1.0);
-
-	t = dot(v0v2, qvec) * inv_det;
-	return true;
-}
-
-__device__ bool
-intersectSphere(const scene::Ray &r, const scene::LightProp & light, float& t)
-{
-    static const float epsilon = 0.01f;
-
-	float3 op = light.vec - r.origin;
-	float b = dot(op, r.dir);
-	float disc = b*b - dot(op, op) + light.radius * light.radius;
-	if (disc < 0.0) return 0;
-
-	disc = __fsqrt_rn(disc);
-	(t = b - disc) > epsilon ? t : ((t = b + disc) > epsilon ? t : 0);
-
-	return t != 0.0;
-}
-
-__device__ inline bool
-intersect(const scene::Ray& r, const scene::Scenes *scenes, unsigned int scene_id,
-  IntersectionData &intersection)
-{
-  static const float MAX_DIST = 100000.0;
-
-  const scene::SceneData *scene = scenes->scenes[scene_id];
-  const scene::Buffer<scene::Texture>& textures = scenes->textures;
-
-  float inter_dist = MAX_DIST;
-  intersection.dist = MAX_DIST;
-
-  float3 normal;
-  float2 uv;
-
-  const scene::Material *inter_mat = nullptr;
-
-  // Checks meshes intersection
-	for (size_t m = 0; m < scene->meshes.size; ++m)
-	{
-		const auto &mesh = scene->meshes.data[m];
-    for (size_t i = 0; i < mesh.faces.size; ++i)
-    {
-      const auto &face = mesh.faces.data[i];
-      if (intersectTriangle(face, normal, uv, r, inter_dist)
-        && inter_dist < intersection.dist && inter_dist > 0.0)
-      {
-		    inter_mat = &scene->materials.data[face.material_id];
-		    intersection.ior = inter_mat->ior;
-        intersection.normal = normal;
-        intersection.surface_normal = normal;
-        intersection.tangent = face.tangent;
-
-        intersection.uv = uv;
-        intersection.dist = inter_dist;
-        intersection.light = NULL;
-      }
-    }
-	}
-
-  // At least one intersection has been found.
-  for (unsigned l = 0; l < scene->lights.size; ++l)
+  struct
   {
-    // Checks lights intersection
-    const scene::LightProp & light = scene->lights.data[l];
-    if (intersectSphere(r, light, inter_dist)
-        && inter_dist < intersection.dist && inter_dist >= 0.0)
-    {
-      intersection.light = &light;
-      intersection.dist = inter_dist;
-      intersection.diffuse_col = make_float3(light.color.x, light.color.y, light.color.z);
-      intersection.normal = normalize(light.vec - (inter_dist * r.dir));
-      intersection.surface_normal = intersection.surface_normal;
-      inter_mat = nullptr;
-    }
-  }
-
-  // Samples texture & computes normal mapping only once,
-  // when we are sure this is the closest intersection.
-  if (inter_mat)
-  {
-    // Fetches diffuse color from texture
-    float4 fetch;
-    sampleTexture(textures, inter_mat->diffuse_spec_map, intersection.uv, fetch);
-    intersection.diffuse_col.x = fetch.x;
-    intersection.diffuse_col.y = fetch.y;
-    intersection.diffuse_col.z = fetch.z;
-
-    intersection.specular_col = fetch.w;
-
-    // Computes normal perturbated by normal map
-    if (inter_mat->normal_map >= 0)
-    {
-      float3 normal;
-      sampleTexture(textures, inter_mat->normal_map, intersection.uv, normal);
-      intersection.normal = normalize((normal * 2.0f) - 1.0f);
-
-      float3 binormal = normalize(cross(intersection.tangent, intersection.surface_normal));
-
-      mat3 tbn;
-      tbn.x = intersection.tangent;
-      tbn.y = -binormal;
-      tbn.z = intersection.surface_normal;
-
-      intersection.normal = tbn * intersection.normal;
-    }
-  }
-
-	return intersection.dist < MAX_DIST;
-}
+    unsigned r : 8;
+    unsigned g : 8;
+    unsigned b : 8;
+    unsigned a : 8;
+  };
+};
 
 #ifndef M_PI
 #define M_PI 3.14159265359f
 #endif
-/*__device__ inline glm::vec3
-sample_lights(scene::Ray& r, const struct scene::SceneData *const scene,
-			  float PDF, const IntersectionData& inter)
-{
-	glm::vec3 L = glm::vec3(0.0f);
-	const scene::Buffer<scene::LightProp>& lights = scene->lights;
-	for (int i = 0; i < lights.size; i++)
-	{
-		const scene::LightProp& const l = lights.data[i];
-		scene::LightProp light;
-		glm::vec3 light_dir = l.vec - r.origin;
 
-		IntersectionData in;
-
-		scene::Ray r_l;
-		r_l.dir = light_dir;
-		r_l.origin = r.origin;
-		if (intersect(r_l, scene, in))
-		{
-			if (!inter.is_light)
-				continue;
-
-			if (l.vec == inter.light->vec)
-				continue;
-
-
-			float n_dot_l = glm::dot(in.normal, light_dir);
-			L += inter.diffuse_col * n_dot_l * l.emission / PDF;
-		}
-	}
-
-	return L;
-}*/
-
-__device__ inline float3 radiance(scene::Ray& r,
-  const struct scene::Scenes *scenes, unsigned int scene_id,
-  const scene::Camera * const cam, curandState* rand_state,
-  int is_static, int static_samples)
+__device__ inline float3
+radiance(scene::Ray& r, const struct scene::Scenes& scenes,
+         unsigned int scene_id, const scene::Camera* const cam,
+         curandState* rand_state, int is_static, int static_samples)
 {
   float3 acc = make_float3(0.0f);
   // For energy compensation on Russian roulette
@@ -301,152 +52,158 @@ __device__ inline float3 radiance(scene::Ray& r,
   IntersectionData inter;
 
   if (!is_static)
-	  if (intersect(r, scenes, scene_id, inter))
-		  return inter.diffuse_col;
-	  else
-	  {
-		  // Accumulate Environment map's contribution (approximated as many far away lights)
-		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
-		  return make_float3(val.x, val.y, val.z);
-	  }
-
+	if (intersect(r, scenes, scene_id, inter))
+	    return inter.diffuse_col;
+	else
+	{
+	    // Accumulate Environment map's contribution (approximated as many far away lights)
+	    auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
+	    return make_float3(val.x, val.y, val.z);
+	}
 
   // Max bounces
   // Bounce more when the camera is not moving
   const int max_bounces = 1 + is_static * (static_samples + 1);
-  for (int b = 0; b < max_bounces; b++)
-  {
-	  float3 oriented_normal;
+  for (int b = 0; b < max_bounces; b++) {
+    float3 oriented_normal;
 
-	  float r1 = curand_uniform(rand_state);
-    if (intersect(r, scenes, scene_id, inter))
-	  {
-		  float cos_theta = dot(inter.normal, r.dir);
-		  oriented_normal = inter.normal;// cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+    float r1 = curand_uniform(rand_state);
+    if (intersect(r, scenes, scene_id, inter)) {
+      inter.normal = inter.normal;
+      float cos_theta = dot(inter.normal, r.dir);
+      oriented_normal =
+        inter.normal; // cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
 
-		  // Oren-Nayar diffuse
-		  //BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir, oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
+      // return oriented_normal;
 
-		  // Specular ray
-		  // Computed everytime and then used to simulate roughness by concentrating rays towards it
-		  float3 spec = normalize(reflect(r.dir, inter.normal));
-		  float PDF = pdf_lambert(); // Divided by PI
-		  //Lambert BRDF/PDF
-		  float3 BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
-		  float3 direct_light = BRDF / PDF;
-		  // Default IOR (Index Of Refraction) is 1.0f
-		  if (inter.ior == 1.0f || inter.light != NULL)
-		  {
-			  // Accumulate light emission
-			  if (inter.light != NULL)
-			  {
-				  BRDF = make_float3(inter.light->color.x, inter.light->color.y, inter.light->color.z);
+      float3 up = make_float3(0.0, 1.0, 0.0);
+      float3 right = cross(up, inter.normal);
+      up = cross(inter.normal, right);
 
-				  acc += BRDF * inter.light->emission * throughput;
-			  }
+      // Oren-Nayar diffuse
+      // BRDF = brdf_oren_nayar(cos_theta, cos_theta, light_dir, r.dir,
+      // oriented_normal, 0.5f, 0.5f, inter.diffuse_col);
 
-			  // Sample the hemisphere with a random ray
-			  float phi = 2.0f * M_PI * curand_uniform(rand_state);//glm::mix(1.0f - inter.specular_col, inter.specular_col, 0.1f);
+      // Specular ray
+      // Computed everytime and then used to simulate roughness by concentrating
+      // rays towards it
+      float3 spec = normalize(reflect(r.dir, inter.normal));
+      float PDF = pdf_lambert(); // Divided by PI
+      // Lambert BRDF/PDF
+      float3 BRDF = brdf_lambert(inter.diffuse_col); // Divided by PI
+      float3 direct_light = BRDF / PDF;
+      // Default IOR (Index Of Refraction) is 1.0f
+      if (inter.ior == 1.0f || inter.light != NULL) {
+        // Accumulate light emission
+        if (inter.light != NULL) {
+          BRDF = make_float3(inter.light->color.x, inter.light->color.y,
+                             inter.light->color.z);
 
-			  float sin_t = __fsqrt_rn(r1);
-			  float cos_t = __fsqrt_rn(1.f - r1);
+          acc += BRDF * inter.light->emission * throughput;
+        }
 
-			  // u, v and oriented_normal form the base of the hemisphere
-			  float3 u = normalize(cross(fabs(oriented_normal.x) > .1 ? make_float3(0.0f, 1.0f, 0.0f) : make_float3(1.0f, 0.0f, 0.0f), oriented_normal));
-			  float3 v = cross(oriented_normal, u);
+        // Sample the hemisphere with a random ray
+        float phi = 2.0f * M_PI *
+                    curand_uniform(rand_state); // glm::mix(1.0f -
+                                                // inter.specular_col,
+                                                // inter.specular_col, 0.1f);
 
-			  //Diffuse hemishphere reflection
-			  float3 d = normalize(v * sin_t * __cosf(phi) + u * __sinf(phi) * sin_t + oriented_normal * cos_t);
+        float sin_t = __fsqrt_rn(r1);
+        float cos_t = __fsqrt_rn(1.f - r1);
 
-			  r.origin += r.dir * inter.dist;
+        // u, v and oriented_normal form the base of the hemisphere
+        float3 u = normalize(cross(fabs(oriented_normal.x) > .1
+                                     ? make_float3(0.0f, 1.0f, 0.0f)
+                                     : make_float3(1.0f, 0.0f, 0.0f),
+                                   oriented_normal));
+        float3 v = cross(oriented_normal, u);
 
-			  // Mix the specular and random diffuse ray by the "specular_col" amount to approximate roughness
-			  r.dir = mix(d, spec, inter.specular_col);
+        // Diffuse hemishphere reflection
+        float3 d = normalize(v * sin_t * __cosf(phi) + u * __sinf(phi) * sin_t +
+                             oriented_normal * cos_t);
 
-			  // Avoids self intersection
-			  r.origin += r.dir * 0.03f;
+        r.origin += r.dir * inter.dist;
 
-			  throughput *= direct_light;
-		  }
-		  else
-		  {
-			  // Transmision
-			  // n1: IOR of exterior medium
-			  float n2 = 1.0f; // sin theta2
-			  // n2: IOR of entering medium
-			  float n1 = inter.ior; // sin theta1
-			  oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
-			  float c1 = dot(oriented_normal, r.dir);
-			  bool entering = dot(inter.normal, oriented_normal) > 0;
-			  // Snell's Law
-			  float eta = entering ? n1 / n2 : n2 / n1;
-			  float eta_2 = eta * eta;
+        // Mix the specular and random diffuse ray by the "specular_col" amount
+        // to approximate roughness
+        r.dir = mix(d, spec, inter.specular_col);
 
-			  float c2_term = 1.0f - eta_2 * (1.0f - c1 * c1);
-			  // Total Internal Reflection
-			  if (c2_term < 0.0f)
-			  {
-				  r.origin += oriented_normal * inter.dist / 100.f;
+        // Avoids self intersection
+        r.origin += r.dir * 0.03f;
 
-				  //return make_float3(1.0f, 0.0f, 0.0f);
-				  r.dir = spec;
-			  }
-			  else
-			  {
-				  // Schlick R0
-				  float R0 = (n2 - n1) / (n1 + n2);
-				  R0 *= R0;
-				  float c2 = __fsqrt_rn(c2_term);
-				  float3 T = normalize(eta * r.dir + (eta * c1 - c2) * oriented_normal);
+        throughput *= direct_light;
+      } else {
+        // Transmision
+        // n1: IOR of exterior medium
+        float n2 = 1.0f; // sin theta2
+        // n2: IOR of entering medium
+        float n1 = inter.ior; // sin theta1
+        oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
+        float c1 = dot(oriented_normal, r.dir);
+        bool entering = dot(inter.normal, oriented_normal) > 0;
+        // Snell's Law
+        float eta = entering ? n1 / n2 : n2 / n1;
+        float eta_2 = eta * eta;
 
-				  float f_cos_theta = 1.0f - (entering ? -c1 : dot(T, inter.normal));
-				  f_cos_theta = powf(cos_theta, 5.0f);
-				  // Fresnel-Schlick approximation for the reflection amount
-				  float f_r = R0 + (1.0f - R0) * f_cos_theta;
+        float c2_term = 1.0f - eta_2 * (1.0f - c1 * c1);
+        // Total Internal Reflection
+        if (c2_term < 0.0f) {
+          r.origin += oriented_normal * inter.dist / 100.f;
 
-				  // If reflection
-				  // Not exactly sure why "0.25f" works better than "f_r"...
-				  if (curand_uniform(rand_state) < 0.25f)
-				  {
-					  throughput *= f_r * direct_light;
+          // return make_float3(1.0f, 0.0f, 0.0f);
+          r.dir = spec;
+        } else {
+          // Schlick R0
+          float R0 = (n2 - n1) / (n1 + n2);
+          R0 *= R0;
+          float c2 = __fsqrt_rn(c2_term);
+          float3 T = normalize(eta * r.dir + (eta * c1 - c2) * oriented_normal);
 
-					  r.origin += oriented_normal * inter.dist / 100.f;
+          float f_cos_theta = 1.0f - (entering ? -c1 : dot(T, inter.normal));
+          f_cos_theta = powf(cos_theta, 5.0f);
+          // Fresnel-Schlick approximation for the reflection amount
+          float f_r = R0 + (1.0f - R0) * f_cos_theta;
 
-					  r.dir = spec;// mix(d, spec, inter.specular_col);
+          // If reflection
+          // Not exactly sure why "0.25f" works better than "f_r"...
+          if (curand_uniform(rand_state) < 0.25f) {
+            throughput *= f_r * direct_light;
 
+            r.origin += oriented_normal * inter.dist / 100.f;
 
-					  //return make_float3(0.0f, 1.0f, 0.0f);
-				  }
-				  else // Transmission
-				  {
-					  // Energy conservation
-					  float f_t = 1.0f - f_r;
+            r.dir = spec; // mix(d, spec, inter.specular_col);
 
-					  throughput *= f_t * direct_light;
+            // return make_float3(0.0f, 1.0f, 0.0f);
+          } else // Transmission
+          {
+            // Energy conservation
+            float f_t = 1.0f - f_r;
 
-					  // We're inside a mesh doing transmission, so we try to reduce the bias as much as possible
-					  // or the ray could get outside of the mesh which makes no sense
-					  r.origin += oriented_normal * inter.dist / 10000.f;
+            throughput *= f_t * direct_light;
 
-					  r.dir = T;
-					  //return make_float3(0.0f, 0.0f, 1.0f);
-				  }
-			  }
-		  }
-	  }
-	  else
-	  {
-		  // Accumulate Environment map's contribution (approximated as many far away lights)
-		  auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
-		  acc += make_float3(val.x, val.y, val.z) * throughput;
-	  }
+            // We're inside a mesh doing transmission, so we try to reduce the
+            // bias as much as possible
+            // or the ray could get outside of the mesh which makes no sense
+            r.origin += oriented_normal * inter.dist / 10000.f;
 
-	  // Russian roulette for early path termination
-	  float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
-	  if (r1 > p && b > 1)
-		  return acc;
+            r.dir = T;
+            // return make_float3(0.0f, 0.0f, 1.0f);
+          }
+        }
+      }
+    } else {
+      // Accumulate Environment map's contribution (approximated as many far
+      // away lights)
+      auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
+      acc += make_float3(val.x, val.y, val.z) * throughput;
+    }
 
-	  throughput *= __fdividef(1.0f, p);
+    // Russian roulette for early path termination
+    float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
+    if (r1 > p && b > 1)
+      return acc;
+
+    throughput *= __fdividef(1.0f, p);
   }
 
   return acc;
@@ -454,100 +211,104 @@ __device__ inline float3 radiance(scene::Ray& r,
 
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
-	const scene::Scenes *scenes, unsigned int scene_id,
-  scene::Camera cam, unsigned int hash_seed, int frame_nb,
-  float3 *temporal_framebuffer, bool moved, post_process_t post)
+       const scene::Scenes scenes, unsigned int scene_id, scene::Camera cam,
+       unsigned int hash_seed, int frame_nb, float3* temporal_framebuffer,
+       bool moved, post_process_t post)
 {
-	const unsigned int half_w = width / 2;
-  	const unsigned int half_h = height / 2;
+  const unsigned int half_w = width / 2;
+  const unsigned int half_h = height / 2;
 
-  	const int x = blockDim.x * blockIdx.x + threadIdx.x;
-  	const int y = blockDim.y * blockIdx.y + threadIdx.y;
+  const int x = blockDim.x * blockIdx.x + threadIdx.x;
+  const int y = blockDim.y * blockIdx.y + threadIdx.y;
 
-	if (x >= width || y >= height) return;
+  if (x >= width || y >= height)
+    return;
 
-	const unsigned int tid = (blockIdx.x + blockIdx.y * gridDim.x)
-    * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
+  const unsigned int tid =
+    (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) +
+    (threadIdx.y * blockDim.x) + threadIdx.x;
 
-	union rgba_24 rgbx;
-	rgbx.a = 0.0;
+  union rgba_24 rgbx;
+  rgbx.a = 0.0;
 
-	curandState rand_state;
-	curand_init(hash_seed + tid, 0, 0, &rand_state);
+  curandState rand_state;
+  curand_init(hash_seed + tid, 0, 0, &rand_state);
 
-	scene::Ray r = generateRay(x, y, half_w, half_h, cam);
+  scene::Ray r = generateRay(x, y, half_w, half_h, cam);
 
-	// Depth-Of-Field
-	camera_dof(r, cam, &rand_state);
+  // Depth-Of-Field
+  camera_dof(r, cam, &rand_state);
 
-	int is_static = !moved;
-	int static_samples = 1;
+  int is_static = !moved;
+  int static_samples = 1;
 
-  float3 rad = radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
-/*=======
-	int samples = 2 + is_static * static_samples;
+  float3 rad =
+    radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
+  /*=======
+          int samples = 2 + is_static * static_samples;
 
-  float3 rad = make_float3(0.0f);
-	for (int i = 0; i < samples; i++)
-	  rad = radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
+    float3 rad = make_float3(0.0f);
+          for (int i = 0; i < samples; i++)
+            rad = radiance(r, scenes, scene_id, &cam, &rand_state, is_static,
+  static_samples);
 
-  rad /= samples;
->>>>>>> feature/gui*/
-	rad = clamp(rad, 0.0f, 1.0f);
+    rad /= samples;
+  >>>>>>> feature/gui*/
+  rad = clamp(rad, 0.0f, 1.0f);
 
-	// Accumulation buffer for when the camera is static
-	// This makes the image converge
-	int i = (height - y - 1) * width + x;
+  // Accumulation buffer for when the camera is static
+  // This makes the image converge
+  int i = (height - y - 1) * width + x;
 
   // Zero-out if the camera is moving to reset the buffer
-	temporal_framebuffer[i] *= is_static;
-	temporal_framebuffer[i] += rad;
+  temporal_framebuffer[i] *= is_static;
+  temporal_framebuffer[i] += rad;
 
-	rad = temporal_framebuffer[i] / (float)frame_nb;
+  rad = temporal_framebuffer[i] / (float)frame_nb;
 
-	// Tone Mapping + White Balance
-	rad = exposure(rad);
-	// Gamma Correction
-	rad = pow(rad, 1.0f / 2.2f);
-        rad = (*post)(rad);
+  // Tone Mapping + White Balance
+  rad = exposure(rad);
+  // Gamma Correction
+  rad = pow(rad, 1.0f / 2.2f);
+  rad = (*post)(rad);
 
-    rgbx.r = rad.x * 255;
-    rgbx.g = rad.y * 255;
-    rgbx.b = rad.z * 255;
+  rgbx.r = rad.x * 255;
+  rgbx.g = rad.y * 255;
+  rgbx.b = rad.z * 255;
 
-	surf2Dwrite(rgbx.b32,
-		surf,
-		x * sizeof(rgbx),
-		y,
-		cudaBoundaryModeZero);
+  surf2Dwrite(rgbx.b32, surf, x * sizeof(rgbx), y, cudaBoundaryModeZero);
 }
 
 // Very nice and fast PRNG
 // Credit: Thomas Wang
-inline unsigned int WangHash(unsigned int a)
+inline unsigned int
+WangHash(unsigned int a)
 {
-	a = (a ^ 61) ^ (a >> 16);
-	a = a + (a << 3);
-	a = a ^ (a >> 4);
-	a = a * 0x27d4eb2d;
-	a = a ^ (a >> 15);
+  a = (a ^ 61) ^ (a >> 16);
+  a = a + (a << 3);
+  a = a ^ (a >> 4);
+  a = a * 0x27d4eb2d;
+  a = a ^ (a >> 15);
 
-	return a;
+  return a;
 }
 
 cudaError_t
-raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scene_id,
-  const std::vector<scene::Cubemap>& cubemaps, int cubemap_id,
-  const scene::Camera * const cam, const unsigned int width, const unsigned int height,
-  cudaStream_t stream, float3 *temporal_framebuffer, bool moved, unsigned int post_id)
+raytrace(cudaArray_const_t array, const scene::Scenes& scenes,
+         unsigned int scene_id, const std::vector<scene::Cubemap>& cubemaps,
+         int cubemap_id, const scene::Camera* const cam,
+         const unsigned int width, const unsigned int height,
+         cudaStream_t stream, float3* temporal_framebuffer, bool moved,
+         unsigned int post_id)
 {
-	// Seed for the Wang Hash
-	static unsigned int seed = 0;
+  // Seed for the Wang Hash
+  static unsigned int seed = 0;
 
-	if (moved) seed = 0;
-	seed++;
+  if (moved)
+    seed = 0;
+  seed++;
 
-	cudaBindSurfaceToArray(surf, array);
+  cudaBindSurfaceToArray(surf, array);
 
   const scene::Cubemap& cubemap = cubemaps[cubemap_id];
   cubemap_ref.addressMode[0] = cudaAddressModeWrap;
@@ -556,47 +317,47 @@ raytrace(cudaArray_const_t array, const scene::Scenes *scenes, unsigned int scen
   cubemap_ref.normalized = true;
   cudaBindTextureToArray(cubemap_ref, cubemap.cubemap, cubemap.cubemap_desc);
 
-	// Register occupancy : nb_threads = regs_per_block / 32
-	// Shared memory occupancy : nb_threads = shared_mem / 32
-	// Block size occupancy
+  // Register occupancy : nb_threads = regs_per_block / 32
+  // Shared memory occupancy : nb_threads = shared_mem / 32
+  // Block size occupancy
 
-	// TODO: We should get into account GPU info, such as number of registers,
-	// shared memory size, warp size, etc...
-	dim3 threads_per_block(16, 16);
-	dim3 nb_blocks(width / threads_per_block.x + 1, height / threads_per_block.y + 1);
+  // TODO: We should get into account GPU info, such as number of registers,
+  // shared memory size, warp size, etc...
+  dim3 threads_per_block(16, 16);
+  dim3 nb_blocks(width / threads_per_block.x + 1,
+                 height / threads_per_block.y + 1);
 
   if (nb_blocks.x > 0 && nb_blocks.y > 0)
-    kernel << <nb_blocks, threads_per_block, 0, stream >> > (width, height, scenes, scene_id , *cam,
-      WangHash(seed), seed, temporal_framebuffer, moved, h_post_process_table[post_id]);
+    kernel<<<nb_blocks, threads_per_block, 0, stream>>>(
+      width, height, scenes, scene_id, *cam, WangHash(seed), seed,
+      temporal_framebuffer, moved, h_post_process_table[post_id]);
 
-	return cudaSuccess;
+  return cudaSuccess;
 }
 
 __device__ float3
-no_post_process(const float3 &color)
+no_post_process(const float3& color)
 {
   return color;
 }
 
 __device__ float3
-grayscale(const float3 &color)
+grayscale(const float3& color)
 {
   const float gray = color.x * 0.3 + color.y * 0.59 + color.z * 0.11;
   return make_float3(gray, gray, gray);
 }
 
 __device__ float3
-sepia(const float3 &color)
+sepia(const float3& color)
 {
-  return make_float3(
-      color.x * 0.393 + color.y * 0.769 + color.z * 0.189,
-      color.x * 0.349 + color.y * 0.686 + color.z * 0.168,
-      color.x * 0.272 + color.y * 0.534 + color.z * 0.131
-    );
+  return make_float3(color.x * 0.393 + color.y * 0.769 + color.z * 0.189,
+                     color.x * 0.349 + color.y * 0.686 + color.z * 0.168,
+                     color.x * 0.272 + color.y * 0.534 + color.z * 0.131);
 }
 
 __device__ float3
-invert(const float3 &color)
+invert(const float3& color)
 {
   return make_float3(1.0 - color.x, 1.0 - color.y, 1.0 - color.z);
 }
@@ -607,22 +368,19 @@ __device__ post_process_t p_sepia = sepia;
 __device__ post_process_t p_invert = invert;
 
 // Copy the pointers from the function tables to the host side.
-void setupFunctionTables()
+void
+setupFunctionTables()
 {
-    cudaMemcpyFromSymbol(
-      &h_post_process_table[0], p_none, sizeof(post_process_t)
-    );
-    cudaCheckError();
-    cudaMemcpyFromSymbol(
-      &h_post_process_table[1], p_gray, sizeof(post_process_t)
-    );
-    cudaCheckError();
-    cudaMemcpyFromSymbol(
-      &h_post_process_table[2], p_sepia, sizeof(post_process_t)
-    );
-    cudaCheckError();
-    cudaMemcpyFromSymbol(
-      &h_post_process_table[3], p_invert, sizeof(post_process_t)
-    );
-    cudaCheckError();
+  cudaMemcpyFromSymbol(&h_post_process_table[0], p_none,
+                       sizeof(post_process_t));
+  cudaCheckError();
+  cudaMemcpyFromSymbol(&h_post_process_table[1], p_gray,
+                       sizeof(post_process_t));
+  cudaCheckError();
+  cudaMemcpyFromSymbol(&h_post_process_table[2], p_sepia,
+                       sizeof(post_process_t));
+  cudaCheckError();
+  cudaMemcpyFromSymbol(&h_post_process_table[3], p_invert,
+                       sizeof(post_process_t));
+  cudaCheckError();
 }

@@ -26,31 +26,33 @@ set(GLFW_DIR glfw)
 
 include_directories(
   ${SLN_DIR}/3rd_party/include
-  ${SLN_DIR}/src
-  ${SLN_DIR}/src/shaders
-  ${SLN_DIR}/src/driver
-  ${SLN_DIR}/src/scene
-  ${SLN_DIR}/src/gui
+  ${SLN_DIR}/include
+  ${SLN_DIR}/include/driver
+  ${SLN_DIR}/include/gui
+  ${SLN_DIR}/include/gui
+  ${SLN_DIR}/include/scene
+  ${SLN_DIR}/include/shaders
+  ${SLN_DIR}/include/utils
   ${GLFW_INSTALL_LOCATION}/include
 )
 
 link_directories(${GLFW_INSTALL_LOCATION}/lib)
 
 set(SRC
+    ${SLN_DIR}/src/driver/glad.cpp
     ${SLN_DIR}/src/driver/gpu_info.cpp
     ${SLN_DIR}/src/driver/interop.cpp
-    ${SLN_DIR}/src/glad.cpp
     ${SLN_DIR}/src/gpu_processor.cpp
     ${SLN_DIR}/src/gui/gui_manager.cpp
     ${SLN_DIR}/src/gui/imgui.cpp
     ${SLN_DIR}/src/gui/imgui_draw.cpp
     ${SLN_DIR}/src/gui/imgui_impl_glfw_gl3.cpp
     ${SLN_DIR}/src/main.cpp
-    ${SLN_DIR}/src/material_loader.cpp
+    ${SLN_DIR}/src/scene/material_loader.cpp
     ${SLN_DIR}/src/scene/scene.cpp
     ${SLN_DIR}/src/shaders/raytrace.cu
-    ${SLN_DIR}/src/texture_utils.cpp
-    ${SLN_DIR}/src/utils.cpp
+    ${SLN_DIR}/src/utils/texture_utils.cpp
+    ${SLN_DIR}/src/utils/utils.cpp
 )
 
 CUDA_ADD_EXECUTABLE(${TARGET} ${SRC})
