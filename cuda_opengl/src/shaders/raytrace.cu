@@ -244,16 +244,7 @@ kernel(const unsigned int width, const unsigned int height,
 
   float3 rad =
     radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
-  /*=======
-          int samples = 2 + is_static * static_samples;
 
-    float3 rad = make_float3(0.0f);
-          for (int i = 0; i < samples; i++)
-            rad = radiance(r, scenes, scene_id, &cam, &rand_state, is_static,
-  static_samples);
-
-    rad /= samples;
-  >>>>>>> feature/gui*/
   rad = clamp(rad, 0.0f, 1.0f);
 
   // Accumulation buffer for when the camera is static
@@ -321,8 +312,6 @@ raytrace(cudaArray_const_t array, const scene::Scenes& scenes,
   // Shared memory occupancy : nb_threads = shared_mem / 32
   // Block size occupancy
 
-  // TODO: We should get into account GPU info, such as number of registers,
-  // shared memory size, warp size, etc...
   dim3 threads_per_block(16, 16);
   dim3 nb_blocks(width / threads_per_block.x + 1,
                  height / threads_per_block.y + 1);

@@ -252,7 +252,7 @@ GPUProcessor::GPUProcessor(const std::string& asset,
   , _moved(false)
 {
   cudaStreamCreateWithFlags(&_stream, cudaStreamDefault);
-  cudaMalloc(&_d_temporal_framebuffer, width * height * sizeof(float3));
+  cudaCalloc(&_d_temporal_framebuffer, width * height, sizeof(float3));
 
   // Initializes all keys to released
   for (size_t i = 0; i < 65536; ++i)
@@ -369,8 +369,8 @@ GPUProcessor::render()
   if (_raw_scenes.size() == 0)
     return;
 
-  _interop.map(_stream);
-  cudaCheckError();
+  const auto error = _interop.map(_stream);
+  if (error != cudaSuccess) return;
 
   raytrace(_interop.getArray(), _scenes, _scene_id, _cubemaps, _cubemap_id,
            &_camera, _interop.width(), _interop.height(), _stream,
@@ -428,6 +428,7 @@ GPUProcessor::release()
   cudaCheckError();
 
   for (size_t i = 0; i < nb_tex; ++i) cudaFree(textures[i].data);
+  cudaFree(_scenes.textures.data);
   delete[] textures;
 
   // Releases the cubemaps
