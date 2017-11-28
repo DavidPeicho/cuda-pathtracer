@@ -135,9 +135,9 @@ radiance(scene::Ray& r, const struct scene::Scenes& scenes,
       } else {
         // Transmision
         // n1: IOR of exterior medium
-        float n2 = 1.0f; // sin theta2
+        float n1 = 1.0f; // sin theta2
         // n2: IOR of entering medium
-        float n1 = inter.ior; // sin theta1
+        float n2 = inter.ior; // sin theta1
         oriented_normal = cos_theta < 0 ? inter.normal : inter.normal * -1.0f;
         float c1 = dot(oriented_normal, r.dir);
         bool entering = dot(inter.normal, oriented_normal) > 0;
