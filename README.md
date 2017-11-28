@@ -16,7 +16,7 @@ Simple Pathtracer made for our CUDA course at EPITA, a French Computer Science s
 ### Scenes
 
 In order to load a scene (or several at a time), you have to provide them on the command line.
-A scene is a special ASCII file looking to something like this:
+A scene is a special ASCII file having the following syntax:
 
 ```
 cubemap cubemap/garden.jpg
@@ -69,3 +69,7 @@ You can build the solution using:
 ```sh
 sh$ mkdir build && cd build && cmake .. && make
 ```
+
+## Tool to visualize the sampling of our BRDF
+
+At the root of the project, you can find a python Jupyter Notebook that helps visualize our BRDF sampling depending on roughness and such.
