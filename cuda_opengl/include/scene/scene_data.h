@@ -25,7 +25,7 @@ struct __align__(8) Cubemap
 };
 
 /// <summary>
-/// GPU-aligned Textures with is size, number of channels,
+/// GPU-aligned Textures with its size, number of channels,
 /// and raw data.
 /// </summary>
 struct __align__(16) Texture

@@ -12,6 +12,7 @@
 #include <shaders/brdf.cuh>
 #include <shaders/intersection.cuh>
 #include <shaders/post_process.cuh>
+#include <shaders/volume.cuh>
 #include <utils/utils.h>
 
 using post_process_t = float3 (*)(const float3&);
@@ -209,6 +210,7 @@ radiance(scene::Ray& r, const struct scene::Scenes& scenes,
   return acc;
 }
 
+
 __global__ void
 kernel(const unsigned int width, const unsigned int height,
        const scene::Scenes scenes, unsigned int scene_id, scene::Camera cam,
@@ -242,10 +244,30 @@ kernel(const unsigned int width, const unsigned int height,
   int is_static = !moved;
   int static_samples = 1;
 
-  float3 rad =
-    radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
+  float3 rad = make_float3(0.0f);
+    //radiance(r, scenes, scene_id, &cam, &rand_state, is_static, static_samples);
 
   rad = clamp(rad, 0.0f, 1.0f);
+  
+  float2 xy = make_float2(x, height - y);
+  float2 res = make_float2(width, height);
+  float2 uv = xy / res;
+  float2 uv2 = 2.0* xy/ res - 1.0;
+  float3 albedo = make_float3(0.0f, 0.0f, 0.0f);
+  float3 normal = make_float3(0.0f, 0.0f, 0.0f);
+  float4 scatTrans = make_float4(1.0f, 0.0f, 0.0f, 0.0f);
+  float3 camPos = make_float3(20.0, 18.0, -60.0);
+  float3 camX = make_float3(1.0, 0.0, 0.0) *0.75;
+  float3 camY = make_float3(0.0, 1.0, 0.0) *0.5;
+  float3 camZ = make_float3(0.0, 0.0, 1.0);
+  camPos += cam.position * 50.f;
+  volume_raymarch(r, albedo, scatTrans);
+
+  //lighting
+  float3 color = (albedo / 3.14);// * evaluateLight(finalPos, normal) * volumetricShadow(finalPos, LPOS);
+  // Apply scattering/transmittance
+  color = color * scatTrans.w + make_float3(scatTrans.x, scatTrans.y, scatTrans.z);
+  color = clamp(color, 0.0f, 1.0f);
 
   // Accumulation buffer for when the camera is static
   // This makes the image converge
@@ -253,9 +275,9 @@ kernel(const unsigned int width, const unsigned int height,
 
   // Zero-out if the camera is moving to reset the buffer
   temporal_framebuffer[i] *= is_static;
-  temporal_framebuffer[i] += rad;
+  temporal_framebuffer[i] += color;
 
-  rad = temporal_framebuffer[i] / (float)frame_nb;
+  rad = color;// temporal_framebuffer[i] / (float)frame_nb;
 
   // Tone Mapping + White Balance
   rad = exposure(rad);

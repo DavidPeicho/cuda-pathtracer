@@ -37,6 +37,7 @@
     <ClInclude Include="include\shaders\cutils_math.h" />
     <ClInclude Include="include\utils\texture_utils.h" />
     <ClInclude Include="include\utils\utils.h" />
+    <ClInclude Include="volume.cuh" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\driver\glad.cpp" />

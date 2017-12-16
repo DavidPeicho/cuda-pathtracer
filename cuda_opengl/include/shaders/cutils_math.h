@@ -1236,10 +1236,11 @@ operator/(float b, float4 a)
 // min
 ////////////////////////////////////////////////////////////////////////////////
 
-/*inline  __host__ __device__ float2 fminf(float2 a, float2 b)
+inline  __host__ __device__ float2 fminf(float2 a, float2 b)
 {
         return make_float2(fminf(a.x,b.x), fminf(a.y,b.y));
 }
+/*
 inline __host__ __device__ float3 fminf(float3 a, float3 b)
 {
         return make_float3(fminf(a.x,b.x), fminf(a.y,b.y), fminf(a.z,b.z));
@@ -1720,6 +1721,12 @@ smoothstep(float3 a, float3 b, float3 x)
 
 inline __device__ __host__ float3
 mix(float3 x, float3 y, float a)
+{
+  return (x * (1.0f - a)) + y * a;
+}
+
+inline __device__ __host__ float
+mix(float x, float y, float a)
 {
   return (x * (1.0f - a)) + y * a;
 }
