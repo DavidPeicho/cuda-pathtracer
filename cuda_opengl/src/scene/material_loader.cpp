@@ -246,7 +246,7 @@ MaterialLoader::getTextureId(std::string tex_rgb, std::string tex_a,
 {
   // CASE 1: There is no texture provided.
   // We will build a custom texture if the material
-  // is not provided any. We will create a 1x1 pixel-wide texture.
+  // is not providing any. We will create a 1x1 pixel-wide texture.
   if (tex_rgb.empty() && tex_a.empty()) {
     _textures.push_back(createUnitTex(
       make_float4(default_rgb.x, default_rgb.y, default_rgb.z, default_a)));

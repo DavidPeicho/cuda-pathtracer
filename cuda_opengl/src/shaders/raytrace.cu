@@ -77,7 +77,7 @@ radiance(scene::Ray& r, const struct scene::Scenes& scenes,
 
       // return oriented_normal;
 
-      float3 up = make_float3(0.0, 1.0, 0.0);
+      float3 up = make_float3(0.0f, 1.0f, 0.0f);
       float3 right = cross(up, inter.normal);
       up = cross(inter.normal, right);
 
@@ -193,7 +193,6 @@ radiance(scene::Ray& r, const struct scene::Scenes& scenes,
         }
       }
     } else {
-      // Accumulate Environment map's contribution (approximated as many far
       // away lights)
       auto val = texCubemap(cubemap_ref, r.dir.x, r.dir.y, -r.dir.z);
       acc += make_float3(val.x, val.y, val.z) * throughput;
@@ -231,7 +230,7 @@ kernel(const unsigned int width, const unsigned int height,
     (threadIdx.y * blockDim.x) + threadIdx.x;
 
   union rgba_24 rgbx;
-  rgbx.a = 0.0;
+  rgbx.a = 0.0f;
 
   curandState rand_state;
   curand_init(hash_seed + tid, 0, 0, &rand_state);
@@ -252,14 +251,14 @@ kernel(const unsigned int width, const unsigned int height,
   float2 xy = make_float2(x, height - y);
   float2 res = make_float2(width, height);
   float2 uv = xy / res;
-  float2 uv2 = 2.0* xy/ res - 1.0;
+  float2 uv2 = 2.0f* xy/ res - 1.0f;
   float3 albedo = make_float3(0.0f, 0.0f, 0.0f);
   float3 normal = make_float3(0.0f, 0.0f, 0.0f);
   float4 scatTrans = make_float4(1.0f, 0.0f, 0.0f, 0.0f);
-  float3 camPos = make_float3(20.0, 18.0, -60.0);
-  float3 camX = make_float3(1.0, 0.0, 0.0) *0.75;
-  float3 camY = make_float3(0.0, 1.0, 0.0) *0.5;
-  float3 camZ = make_float3(0.0, 0.0, 1.0);
+  float3 camPos = albedo;// make_float3(20.0f, 18.0f, -60.0f);
+  float3 camX = make_float3(1.0f, 0.0f, 0.0f) *0.75;
+  float3 camY = make_float3(0.0f, 1.0f, 0.0f) *0.5;
+  float3 camZ = make_float3(0.0f, 0.0f, 1.0f);
   camPos += cam.position * 50.f;
   volume_raymarch(r, albedo, scatTrans);
 
@@ -370,7 +369,7 @@ sepia(const float3& color)
 __device__ float3
 invert(const float3& color)
 {
-  return make_float3(1.0 - color.x, 1.0 - color.y, 1.0 - color.z);
+  return make_float3(1.0f - color.x, 1.0f - color.y, 1.0f - color.z);
 }
 
 __device__ post_process_t p_none = no_post_process;
