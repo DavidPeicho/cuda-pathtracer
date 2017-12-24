@@ -20,7 +20,6 @@ using post_process_t = float3 (*)(const float3&);
 post_process_t h_post_process_table[4];
 
 surface<void, cudaSurfaceType2D> surf;
-texture<float4, cudaTextureTypeCubemap> cubemap_ref;
 
 union rgba_24
 {
