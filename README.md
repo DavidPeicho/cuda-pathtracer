@@ -1,3 +1,8 @@
+> STATUS: Discontinued.
+> 
+> This project was made part of our Master's degree at EPITA. The project is now discontinued
+> and will not receive any improvement / bug fix.
+
 # Pathtracer with CUDA!
 
 <p align="center">
